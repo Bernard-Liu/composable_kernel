@@ -71,6 +71,8 @@ template <typename ALayout,
           BlockGemmPipelineVersion BlkGemmPipelineVer = BlockGemmPipelineVersion::v1,
           typename ComputeTypeA                       = CDataType,
           typename ComputeTypeB                       = ComputeTypeA,
+          bool PermuteA                               = false,
+          bool PermuteB                               = false,
           typename LDSTypeA                           = ComputeTypeA,
           typename LDSTypeB                           = ComputeTypeB>
 struct DeviceGemmMultiD_BScale_Xdl_CShuffle_V3

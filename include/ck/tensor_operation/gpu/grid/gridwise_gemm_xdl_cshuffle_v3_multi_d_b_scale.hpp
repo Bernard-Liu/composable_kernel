@@ -158,6 +158,20 @@ struct GridwiseGemmMultiD_BScale_xdl_cshuffle_v3
 
     using ThisThreadBlock = ThisThreadBlock<BlockSize>;
 
+        static constexpr index_t APackedSize = []() {
+        if constexpr(is_same_v<remove_cvref_t<ADataType>, pk_i4_t>)
+            return 2;
+        else
+            return 1;
+    }();
+
+    static constexpr index_t BPackedSize = []() {
+        if constexpr(is_same_v<remove_cvref_t<BDataType>, pk_i4_t>)
+            return 2;
+        else
+            return 1;
+    }();
+
     __host__ static auto CalculateGridSize(index_t M, index_t N, index_t KBatch)
     {
         return std::make_tuple(Block2CTileMap::CalculateGridSize(M, N), 1, KBatch);
@@ -1387,6 +1401,12 @@ struct GridwiseGemmMultiD_BScale_xdl_cshuffle_v3
 
         auto b_thread_offset =
             get_thread_local_1d_id() % NPerXdl + (get_thread_local_1d_id() / 64) % NWaves * NPerXdl;
+
+        // __syncthreads();
+        // if(blockIdx.x==0)
+        // {
+        //     printf("ThreadIdx: %d, b_thread_offset: %d\n", get_thread_local_1d_id(), b_thread_offset);
+        // }
 
         auto b_scale_thread_copy =
             ThreadwiseTensorSliceTransfer_v2<BScaleType,
