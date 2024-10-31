@@ -148,6 +148,8 @@ struct DeviceGemmMultiD_BScale_Xdl_CShuffle_V3
         BlkGemmPipelineVer,
         ComputeTypeA,
         ComputeTypeB,
+        PermuteA,
+        PermuteB,
         LDSTypeA,
         LDSTypeB>;
 
