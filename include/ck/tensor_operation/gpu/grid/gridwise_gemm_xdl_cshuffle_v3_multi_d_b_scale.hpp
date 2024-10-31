@@ -1443,29 +1443,28 @@ struct GridwiseGemmMultiD_BScale_xdl_cshuffle_v3
 
         const index_t num_k_block_per_scale = ScaleBlockK / KPerBlock;
 
-        blockwise_gemm_pipeline.template Run<HasMainKBlockLoop, TailNum>(
-            a_grid_desc_ak0_m_ak1,
-            a_block_desc_ak0_m_ak1,
-            a_blockwise_copy,
-            a_grid_buf,
-            a_block_buf,
-            a_block_slice_copy_step,
-            b_grid_desc_bk0_n_bk1,
-            b_block_desc_bk0_n_bk1,
-            b_blockwise_copy,
-            b_grid_buf,
-            b_block_buf,
-            b_block_slice_copy_step,
-            c_thread_buf,
-
-            b_scale_grid_desc_bn_ak,
-            b_scale_thread_desc,
-            b_scale_thread_copy,
-            b_scale_grid_buf,
-            b_scale_thread_slice_copy_step,
-
-            num_k_block_main_loop,
-            num_k_block_per_scale);
+        blockwise_gemm_pipeline.template Run<HasMainKBlockLoop, TailNum>(a_grid_desc_ak0_m_ak1,
+                                                                         a_block_desc_ak0_m_ak1,
+                                                                         a_blockwise_copy,
+                                                                         a_grid_buf,
+                                                                         a_block_buf,
+                                                                         a_block_slice_copy_step,
+                                                                         b_grid_desc_bk0_n_bk1,
+                                                                         b_block_desc_bk0_n_bk1,
+                                                                         b_blockwise_copy,
+                                                                         b_grid_buf,
+                                                                         b_block_buf,
+                                                                         b_block_slice_copy_step,
+                                                                         c_thread_buf,
+ 
+                                                                         b_scale_grid_desc_bn_ak,
+                                                                         b_scale_thread_desc,
+                                                                         b_scale_thread_copy,
+                                                                         b_scale_grid_buf,
+                                                                         b_scale_thread_slice_copy_step,
+ 
+                                                                         num_k_block_main_loop,
+                                                                         num_k_block_per_scale);
 
         // shuffle C and write out
         {
