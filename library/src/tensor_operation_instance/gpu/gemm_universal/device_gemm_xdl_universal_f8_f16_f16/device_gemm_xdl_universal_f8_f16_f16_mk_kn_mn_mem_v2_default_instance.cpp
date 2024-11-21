@@ -13,9 +13,10 @@ void add_device_gemm_xdl_universal_f8_f16_f16_mk_kn_mn_mem_v2_default_instances(
         DeviceGemmV2<Row, Row, Row, F8, F16, F16, PassThrough, PassThrough, PassThrough>>>&
         instances)
 {
-    add_device_operation_instances(
-        instances,
-        device_gemm_xdl_universal_f8_f16_f16_mk_kn_mn_mem_instances<Interwave, GemmDefault>{});
+//    add_device_operation_instances(
+//        instances,
+//        device_gemm_xdl_universal_f8_f16_f16_mk_kn_mn_mem_instances<Interwave, GemmDefault>{});
+    ignore = instances;
 }
 
 } // namespace instance

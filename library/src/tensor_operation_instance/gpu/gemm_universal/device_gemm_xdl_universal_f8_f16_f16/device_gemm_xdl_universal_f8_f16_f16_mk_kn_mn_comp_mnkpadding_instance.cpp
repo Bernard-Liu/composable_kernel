@@ -13,8 +13,9 @@ void add_device_gemm_xdl_universal_f8_f16_f16_mk_kn_mn_comp_mnkpadding_instances
         DeviceGemmV2<Row, Row, Row, F8, F16, F16, PassThrough, PassThrough, PassThrough>>>&
         instances)
 {
-    add_device_operation_instances(
-        instances, device_gemm_xdl_universal_f8_f16_f16_mk_kn_mn_comp_instances<GemmMNKPadding>{});
+//    add_device_operation_instances(
+//        instances, device_gemm_xdl_universal_f8_f16_f16_mk_kn_mn_comp_instances<GemmMNKPadding>{});
+    ignore = instances;
 }
 
 } // namespace instance
