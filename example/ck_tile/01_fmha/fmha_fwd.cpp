@@ -769,7 +769,28 @@ bool run(const ck_tile::ArgParser& arg_parser)
     ck_tile::DeviceMem cache_batch_idx_buf(cache_batch_idx_host.get_element_space_size_in_bytes());
 
     q_buf.ToDevice(q_host.data());
-    k_buf.ToDevice(k_host.data());
+
+    if(0 < page_block_size)
+    {
+        if (!(i_perm && !is_v_rowmajor)) {
+            std::cerr << "make sure input layout is correct" << std::endl;
+            return false;
+        }
+
+        // k_host shape: (max_num_page_blocks, nhead_k, page_block_size, hdim_q)
+        // transpose to vllm paged-kvcache layout
+        ck_tile::HostTensor<KDataType> k_host_transposed(
+            {max_num_page_blocks, nhead_k, hdim_q / 8, page_block_size, 8});
+
+        k_host.ForEach([&](auto& self, auto& idx) {
+            k_host_transposed(idx[0], idx[1], idx[3] / 8, idx[2], idx[3] % 8) = self(idx);
+        });
+        k_buf.ToDevice(k_host_transposed.data());
+    }
+    else
+    {
+        k_buf.ToDevice(k_host.data());
+    }
     knew_buf.ToDevice(knew_host.data());
     v_buf.ToDevice(v_host.data());
     vnew_buf.ToDevice(vnew_host.data());
