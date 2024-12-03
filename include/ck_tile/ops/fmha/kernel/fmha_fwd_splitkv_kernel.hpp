@@ -636,7 +636,7 @@ struct FmhaFwdSplitKVKernel
 
         const auto make_k_dram = [&](const KDataType* data, index_t height) {
             auto k_dram_naive = [&] {
-                if constexpr(kIsPagedKV)
+                if constexpr(kIsGroupMode && kIsPagedKV)
                 {
                     constexpr index_t vector_size = 16 / sizeof(KDataType);
                     // (hdim_q/vector_size, page_block_size, vector_size)

@@ -770,9 +770,10 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
     q_buf.ToDevice(q_host.data());
 
-    if(0 < page_block_size)
+    if(mode == mode_enum::group && 0 < page_block_size)
     {
-        if (!(i_perm && !is_v_rowmajor)) {
+        if(!(i_perm && !is_v_rowmajor))
+        {
             std::cerr << "make sure input layout is correct" << std::endl;
             return false;
         }
