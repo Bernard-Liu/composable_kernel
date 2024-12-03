@@ -638,12 +638,14 @@ struct FmhaFwdSplitKVKernel
             auto k_dram_naive = [&] {
                 if constexpr(kIsPagedKV)
                 {
-                    constexpr index_t vector_size = FmhaPipeline::kAlignmentK;
+                    constexpr index_t vector_size = 16 / sizeof(KDataType);
                     // (hdim_q/vector_size, page_block_size, vector_size)
                     const auto view = make_naive_tensor_view<address_space_enum::global>(
                         data, // will update this pointer if using paged-kvcache
                         make_tuple(kargs.hdim_q / vector_size, height, number<vector_size>{}),
-                        make_tuple(height * vector_size, number<vector_size>{}, number<1>{}),
+                        make_tuple(kargs.page_block_size * vector_size,
+                                   number<vector_size>{},
+                                   number<1>{}),
                         number<vector_size>{},
                         number<1>{});
 
