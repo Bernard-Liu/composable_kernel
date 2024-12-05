@@ -25,7 +25,6 @@ struct GemmKernel
 
     using ADataType = remove_cvref_t<typename GemmPipeline::ADataType>;
     using BDataType = remove_cvref_t<typename GemmPipeline::BDataType>;
-    // using CAccDataType = remove_cvref_t<typename GemmPipeline::CDataType>;
     using CDataType = remove_cvref_t<typename EpiloguePipeline::ODataType>;
 
     __host__ static constexpr auto GridSize(index_t M, index_t N, index_t KBatch)
@@ -214,20 +213,6 @@ struct GemmKernel
             {i_m, i_n});
         
         EpiloguePipeline{}(CBlockWindow_pad, c_block_tile);
-        // using CSubTileDistr = decltype(GemmPipeline::MakeCBlockSubTile());
-        
-        // static_for<0, GemmPipeline::NumCSubTile(), 1>{}([&](auto i_m0) 
-        // {
-        //     CSubTileDistr c_sub_tile;
-        //     constexpr auto c_sub_y_index_zeros = uniform_sequence_gen_t<c_sub_tile.get_tile_distribution().get_num_of_dimension_y(), 0>{};
-        //     constexpr auto c_sub_y_lengths = to_sequence(c_sub_tile.get_tile_distribution().get_ys_to_d_descriptor().get_lengths());
-        //     c_sub_tile.get_thread_buffer() = c_block_tile.get_y_sliced_thread_data(
-        //                                         merge_sequences(sequence<i_m0>{}, c_sub_y_index_zeros),
-        //                                         merge_sequences(sequence<1>{}, c_sub_y_lengths));
-                                                
-        //     EpiloguePipeline{}(CBlockWindow_pad, c_sub_tile, smem_ptr);
-        //     move_tile_window(CBlockWindow_pad, {TilePartitioner::kM / GemmPipeline::NumCSubTile(), 0});
-        // });
     }
 };
 

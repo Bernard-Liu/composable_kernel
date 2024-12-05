@@ -11,6 +11,13 @@ namespace ck_tile {
 // A is block distributed tensor
 // B is block distributed tensor
 // C is block distributed tensor
+// diff from v1: 
+//      1. use mwarp x nwarp = 2x2
+//      2. use 32x32x16 block gemm
+//      3. expose a lds, b lds distribution 
+//      4. impl a subtile for output c shuffle sub tile construct
+//      5. reformat some code. 
+//      todo: merge these using universal gemm
 template <typename Problem_, typename Policy_ = BlockGemmARegBRegCRegV1DefaultPolicy>
 struct BlockGemmARegBRegCRegV2
 {
@@ -44,22 +51,8 @@ struct BlockGemmARegBRegCRegV2
                           std::is_same_v<CDataType, remove_cv_t<typename CBlockTensor::DataType>>,
                       "wrong!");
 
-        // M->N Warp
-        constexpr auto a_block_outer_dstr_encoding =
-            tile_distribution_encoding<sequence<NWarp>,
-                                       tuple<sequence<MIterPerWarp, MWarp>, sequence<KIterPerWarp>>,
-                                       tuple<sequence<1, 0>>,
-                                       tuple<sequence<1, 0>>,
-                                       sequence<1, 2>,
-                                       sequence<0, 0>>{};
-
-        constexpr auto b_block_outer_dstr_encoding =
-            tile_distribution_encoding<sequence<MWarp>,
-                                       tuple<sequence<NIterPerWarp, NWarp>, sequence<KIterPerWarp>>,
-                                       tuple<sequence<0, 1>>,
-                                       tuple<sequence<0, 1>>,
-                                       sequence<1, 2>,
-                                       sequence<0, 0>>{};
+        constexpr auto a_block_dstr_encode = MakeABlockDistribution();
+        constexpr auto b_block_dstr_encode = MakeBBlockDistribution();
 
         constexpr auto c_block_outer_dstr_encoding = tile_distribution_encoding<
             sequence<>,
@@ -68,12 +61,6 @@ struct BlockGemmARegBRegCRegV2
             tuple<sequence<1, 1>>,
             sequence<1, 2>,
             sequence<0, 0>>{};
-
-        constexpr auto a_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
-            a_block_outer_dstr_encoding, typename WG::AWarpDstrEncoding{});
-
-        constexpr auto b_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
-            b_block_outer_dstr_encoding, typename WG::BWarpDstrEncoding{});
 
         constexpr auto c_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
             c_block_outer_dstr_encoding, typename WG::CWarpDstrEncoding{});
@@ -169,36 +156,29 @@ struct BlockGemmARegBRegCRegV2
         return c_block_tensor;
     }
 
-    CK_TILE_DEVICE static constexpr auto MakeCBlockSubTile()
-    {
-        constexpr auto c_block_outer_dstr_encoding = tile_distribution_encoding<
-            sequence<>,
-            tuple<sequence<MWarp>, sequence<NIterPerWarp, NWarp>>,
-            tuple<sequence<1, 2>>,
-            tuple<sequence<0, 1>>,
-            sequence<2>,
-            sequence<0>>{};
+    // for cshuffle, disable currently
+    // CK_TILE_DEVICE static constexpr auto MakeCBlockSubTile()
+    // {
+    //     constexpr auto c_block_outer_dstr_encoding = tile_distribution_encoding<
+    //         sequence<>,
+    //         tuple<sequence<MWarp>, sequence<NIterPerWarp, NWarp>>,
+    //         tuple<sequence<1, 2>>,
+    //         tuple<sequence<0, 1>>,
+    //         sequence<2>,
+    //         sequence<0>>{};
 
-        constexpr auto c_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
-            c_block_outer_dstr_encoding, typename WG::CWarpDstrEncoding{});
-        constexpr auto c_block_dstr = make_static_tile_distribution(c_block_dstr_encode);
-        auto c_block_tensor         = make_static_distributed_tensor<CDataType>(c_block_dstr);
-        return c_block_tensor;
-    }
+    //     constexpr auto c_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
+    //         c_block_outer_dstr_encoding, typename WG::CWarpDstrEncoding{});
+    //     constexpr auto c_block_dstr = make_static_tile_distribution(c_block_dstr_encode);
+    //     auto c_block_tensor         = make_static_distributed_tensor<CDataType>(c_block_dstr);
+    //     return c_block_tensor;
+    // }
     
     CK_TILE_DEVICE static constexpr auto MakeABlockDistribution()
     {
-        // M->N Warp
-        // using AWarpDstrEncoding = tile_distribution_encoding<
-        //     sequence<>,
-        //     tuple<sequence<Impl::kAMLane>, sequence<Impl::kABKLane, Impl::kABKPerLane * kKIter>>, //<32>, <2, 8>
-        //     tuple<sequence<2, 1>>,
-        //     tuple<sequence<0, 0>>,
-        //     sequence<2>,
-        //     sequence<1>>;
         constexpr auto a_block_outer_dstr_encoding =
             tile_distribution_encoding<sequence<NWarp>,
-                                       tuple<sequence<MIterPerWarp, MWarp>, sequence<KIterPerWarp>>, // <4, 2>, <2>
+                                       tuple<sequence<MIterPerWarp, MWarp>, sequence<KIterPerWarp>>,
                                        tuple<sequence<1, 0>>,
                                        tuple<sequence<1, 0>>,
                                        sequence<1, 2>,
@@ -224,16 +204,6 @@ struct BlockGemmARegBRegCRegV2
 
         constexpr auto b_block_dstr = make_static_tile_distribution(b_block_dstr_encode);
         return b_block_dstr;
-        // return make_static_distributed_tensor<BDataType>(b_block_dstr);
-    }
-    
-    // Prefetch lds
-    template <typename BlockWindow, typename BlockTensor>
-    CK_TILE_DEVICE static void PrefetchLds(const BlockWindow& block_window, BlockTensor& block_tensor)
-    {
-        auto tileDist = BlockTensor::get_tile_distribution();
-        // load_tile(block_tensor, make_tile_window(block_window, tileDist));
-        load_tile(block_tensor, make_tile_window_linear(block_window, tileDist));
     }
     
     // C = A * B

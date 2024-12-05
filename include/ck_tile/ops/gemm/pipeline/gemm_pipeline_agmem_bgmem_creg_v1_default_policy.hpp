@@ -16,37 +16,7 @@ struct GemmPipelineAGmemBGmemCRegV1DefaultPolicy
     template <typename Problem>
     using BlockGemm = BlockGemmARegBRegCRegV2<Problem, BlockGemmPolicy>;
 
-#if 0
-    // 2d
-    template <typename Problem>
-    CK_TILE_HOST_DEVICE static constexpr auto MakeALdsBlockDescriptor()
-    {
-        using namespace ck_tile;
-
-        constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
-        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
-
-        constexpr auto a_lds_block_desc =
-            make_naive_tensor_descriptor_packed(make_tuple(kMPerBlock, kKPerBlock), number<32>{});
-
-        return a_lds_block_desc;
-    }
-
-    // 2d
-    template <typename Problem>
-    CK_TILE_HOST_DEVICE static constexpr auto MakeBLdsBlockDescriptor()
-    {
-        using namespace ck_tile;
-
-        constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
-        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
-
-        constexpr auto b_lds_block_desc =
-            make_naive_tensor_descriptor_packed(make_tuple(kNPerBlock, kKPerBlock), number<32>{});
-
-        return b_lds_block_desc;
-    }
-#elif 1
+#if 1
     // 3d + padding
     template <typename Problem>
     CK_TILE_HOST_DEVICE static constexpr auto MakeALdsBlockDescriptor()
@@ -88,8 +58,6 @@ struct GemmPipelineAGmemBGmemCRegV1DefaultPolicy
 
         constexpr auto b_lds_block_desc = transform_tensor_descriptor(
             b_lds_block_desc_0,
-            // make_tuple(make_pass_through_transform(kNPerBlock),
-            //            make_merge_transform(make_tuple(kKPerBlock / 8, 8))),
             make_tuple(make_pass_through_transform(number<kNPerBlock>{}),
                        make_merge_transform(make_tuple(number<kKPerBlock / 8>{}, number<8>{}))),
             make_tuple(sequence<1>{}, sequence<0, 2>{}),
@@ -135,76 +103,76 @@ struct GemmPipelineAGmemBGmemCRegV1DefaultPolicy
         using BDataType = remove_cvref_t<typename Problem::BDataType>;
         return Problem::VectorLoadSize / sizeof(BDataType);
     }
-#elif 1
+#else
     // fake XOR
-    // template <typename Problem>
-    // CK_TILE_HOST_DEVICE static constexpr auto MakeALdsBlockDescriptor()
-    // {
-    //     using namespace ck_tile;
+    template <typename Problem>
+    CK_TILE_HOST_DEVICE static constexpr auto MakeALdsBlockDescriptor()
+    {
+        using namespace ck_tile;
 
-    //     using ADataType = remove_cvref_t<typename Problem::ADataType>;
+        using ADataType = remove_cvref_t<typename Problem::ADataType>;
 
-    //     constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
-    //     constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
+        constexpr index_t kMPerBlock = Problem::BlockGemmShape::kM;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
 
-    //     constexpr auto a_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
-    //         make_tuple(number<kMPerBlock / 2>{}, number<2>{}, number<kKPerBlock>{}),
-    //         number<kKPerBlock>{});
+        constexpr auto a_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
+            make_tuple(number<kMPerBlock / 2>{}, number<2>{}, number<kKPerBlock>{}),
+            number<kKPerBlock>{});
 
-    //     constexpr index_t kK1 = 16 / sizeof(ADataType);
+        constexpr index_t kK1 = 16 / sizeof(ADataType);
 
-    //     constexpr auto a_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
-    //         a_lds_block_desc_d1_d2_d3,
-    //         make_tuple(
-    //             make_xor_transform(make_tuple(number<kMPerBlock / 2>{}, number<kKPerBlock>{}), kK1),
-    //             make_pass_through_transform(2)),
-    //         make_tuple(sequence<0, 2>{}, sequence<1>{}),
-    //         make_tuple(sequence<0, 2>{}, sequence<1>{}));
+        constexpr auto a_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
+            a_lds_block_desc_d1_d2_d3,
+            make_tuple(
+                make_xor_transform(make_tuple(number<kMPerBlock / 2>{}, number<kKPerBlock>{}), kK1),
+                make_pass_through_transform(2)),
+            make_tuple(sequence<0, 2>{}, sequence<1>{}),
+            make_tuple(sequence<0, 2>{}, sequence<1>{}));
 
-    //     constexpr auto a_lds_block_desc_m_k = transform_tensor_descriptor(
-    //         a_lds_block_desc_d4_d5_d6,
-    //         make_tuple(make_merge_transform(make_tuple(number<kMPerBlock / 2>{}, number<2>{})),
-    //                    make_pass_through_transform(kKPerBlock)),
-    //         make_tuple(sequence<0, 1>{}, sequence<2>{}),
-    //         make_tuple(sequence<0>{}, sequence<1>{}));
+        constexpr auto a_lds_block_desc_m_k = transform_tensor_descriptor(
+            a_lds_block_desc_d4_d5_d6,
+            make_tuple(make_merge_transform(make_tuple(number<kMPerBlock / 2>{}, number<2>{})),
+                       make_pass_through_transform(kKPerBlock)),
+            make_tuple(sequence<0, 1>{}, sequence<2>{}),
+            make_tuple(sequence<0>{}, sequence<1>{}));
 
-    //     return a_lds_block_desc_m_k;
-    // }
+        return a_lds_block_desc_m_k;
+    }
 
-    // // fake XOR
-    // template <typename Problem>
-    // CK_TILE_HOST_DEVICE static constexpr auto MakeBLdsBlockDescriptor()
-    // {
-    //     using namespace ck_tile;
+    // fake XOR
+    template <typename Problem>
+    CK_TILE_HOST_DEVICE static constexpr auto MakeBLdsBlockDescriptor()
+    {
+        using namespace ck_tile;
 
-    //     using BDataType = remove_cvref_t<typename Problem::BDataType>;
+        using BDataType = remove_cvref_t<typename Problem::BDataType>;
 
-    //     constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
-    //     constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
+        constexpr index_t kNPerBlock = Problem::BlockGemmShape::kN;
+        constexpr index_t kKPerBlock = Problem::BlockGemmShape::kK;
 
-    //     constexpr auto b_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
-    //         make_tuple(number<kNPerBlock / 2>{}, number<2>{}, number<kKPerBlock>{}),
-    //         number<kKPerBlock>{});
+        constexpr auto b_lds_block_desc_d1_d2_d3 = make_naive_tensor_descriptor_packed(
+            make_tuple(number<kNPerBlock / 2>{}, number<2>{}, number<kKPerBlock>{}),
+            number<kKPerBlock>{});
 
-    //     constexpr index_t kK1 = 16 / sizeof(BDataType);
+        constexpr index_t kK1 = 16 / sizeof(BDataType);
 
-    //     constexpr auto b_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
-    //         b_lds_block_desc_d1_d2_d3,
-    //         make_tuple(
-    //             make_xor_transform(make_tuple(number<kNPerBlock / 2>{}, number<kKPerBlock>{}), kK1),
-    //             make_pass_through_transform(2)),
-    //         make_tuple(sequence<0, 2>{}, sequence<1>{}),
-    //         make_tuple(sequence<0, 2>{}, sequence<1>{}));
+        constexpr auto b_lds_block_desc_d4_d5_d6 = transform_tensor_descriptor(
+            b_lds_block_desc_d1_d2_d3,
+            make_tuple(
+                make_xor_transform(make_tuple(number<kNPerBlock / 2>{}, number<kKPerBlock>{}), kK1),
+                make_pass_through_transform(2)),
+            make_tuple(sequence<0, 2>{}, sequence<1>{}),
+            make_tuple(sequence<0, 2>{}, sequence<1>{}));
 
-    //     constexpr auto b_lds_block_desc_n_k = transform_tensor_descriptor(
-    //         b_lds_block_desc_d4_d5_d6,
-    //         make_tuple(make_merge_transform(make_tuple(number<kNPerBlock / 2>{}, number<2>{})),
-    //                    make_pass_through_transform(kKPerBlock)),
-    //         make_tuple(sequence<0, 1>{}, sequence<2>{}),
-    //         make_tuple(sequence<0>{}, sequence<1>{}));
+        constexpr auto b_lds_block_desc_n_k = transform_tensor_descriptor(
+            b_lds_block_desc_d4_d5_d6,
+            make_tuple(make_merge_transform(make_tuple(number<kNPerBlock / 2>{}, number<2>{})),
+                       make_pass_through_transform(kKPerBlock)),
+            make_tuple(sequence<0, 1>{}, sequence<2>{}),
+            make_tuple(sequence<0>{}, sequence<1>{}));
 
-    //     return b_lds_block_desc_n_k;
-    // }
+        return b_lds_block_desc_n_k;
+    }
 #endif
 
     template <typename Problem>
