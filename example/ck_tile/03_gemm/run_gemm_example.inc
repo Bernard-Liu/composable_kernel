@@ -119,9 +119,12 @@ int run_gemm_example_with_layouts(int argc,
     } else if (init_method == 1) {
         ck_tile::FillMonotonicSeq<ADataType>{}(a_m_k);
         ck_tile::FillMonotonicSeq<BDataType>{}(b_k_n);
-    } else {
+    } else if (init_method == 2) {
         ck_tile::FillConstant<ADataType>{1.f}(a_m_k);
         ck_tile::FillConstant<BDataType>{1.f}(b_k_n);
+    } else {
+        a_m_k.SetZero();
+        b_k_n.SetZero();
     }
     ck_tile::DeviceMem a_m_k_dev_buf(a_m_k.get_element_space_size_in_bytes());
     ck_tile::DeviceMem b_k_n_dev_buf(b_k_n.get_element_space_size_in_bytes());

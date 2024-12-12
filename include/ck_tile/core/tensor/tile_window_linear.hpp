@@ -440,13 +440,6 @@ struct tile_window_linear
             // we directly use BottomTensorView transform to compute the offset, in case padding
             auto bottom_tensor_coord =
                 make_tensor_coordinate(BottomTensorView{}.get_tensor_descriptor(), linear_coord);
-            // if(threadIdx.x == 0) {
-            //     bottom_tensor_coord =
-            //         make_tensor_coordinate(BottomTensorView{}.get_tensor_descriptor(), linear_coord);
-            //     printf("off00 %d %d\n",i_access, bottom_tensor_coord.get_offset() );
-            //     bottom_tensor_coord.get_hidden_index().print();
-            //     bottom_tensor_coord.get_index().print();
-            // }
             return bottom_tensor_coord.get_offset();
         }
         else
@@ -550,7 +543,8 @@ struct tile_window_linear
             auto bottom_tensor_thread_coord = cached_coords_[non_linear_id];
             auto bottom_tensor_flag         = cached_flags_[IAccess];
 
-            auto linear_offset = get_bottom_linear_offset(IAccess);
+            constexpr auto linear_offset = get_bottom_linear_offset(IAccess);
+
             // read from bottom tensor
             const vector_t vec_value =
                 get_bottom_tensor_view().template get_vectorized_elements<vector_t>(
