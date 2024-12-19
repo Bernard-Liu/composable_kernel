@@ -623,14 +623,14 @@ struct FmhaFwdSplitKVKernel
                 return pad_tensor_view(
                     q_dram_naive,
                     make_tuple(number<FmhaPipeline::kM0>{}, number<FmhaPipeline::kSubQKHeaddim>{}),
-                    sequence<kPadSeqLenQ, kPadHeadDimQ>{});
+                    sequence<false, kPadHeadDimQ>{});
             }
             else
             {
                 return pad_tensor_view(
                     q_dram_naive,
                     make_tuple(number<FmhaPipeline::kM0>{}, number<FmhaPipeline::kK0>{}),
-                    sequence<kPadSeqLenQ, kPadHeadDimQ>{});
+                    sequence<false, kPadHeadDimQ>{});
             }
         }();
 
@@ -673,7 +673,7 @@ struct FmhaFwdSplitKVKernel
             return pad_tensor_view(
                 k_dram_naive,
                 make_tuple(number<FmhaPipeline::kN0>{}, number<FmhaPipeline::kK0>{}),
-                sequence<kPadSeqLenK, kPadHeadDimQ>{});
+                sequence<false, kPadHeadDimQ>{});
         };
         const auto k_dram = [&]() {
             if constexpr(kIsPagedKV)
@@ -706,7 +706,7 @@ struct FmhaFwdSplitKVKernel
                 return pad_tensor_view(
                     v_dram_transposed,
                     make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
-                    sequence<kPadHeadDimV, kPadSeqLenK>{});
+                    sequence<kPadHeadDimV, false>{});
             }
             else
             {
@@ -720,7 +720,7 @@ struct FmhaFwdSplitKVKernel
                 return pad_tensor_view(
                     v_dram_naive,
                     make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
-                    sequence<kPadHeadDimV, kPadSeqLenK>{});
+                    sequence<false, kPadSeqLenK>{});
             }
         };
         const auto v_dram = [&]() {
@@ -832,9 +832,8 @@ struct FmhaFwdSplitKVKernel
                         number<FmhaPipeline::kAlignmentBias>{},
                         number<1>{});
 
-                    return pad_tensor_view(bias_dram_naive,
-                                           bias_dram_window_lengths,
-                                           sequence<kPadSeqLenQ, kPadSeqLenK>{});
+                    return pad_tensor_view(
+                        bias_dram_naive, bias_dram_window_lengths, sequence<false, kPadSeqLenK>{});
                 }();
 
                 return make_tile_window(bias_dram, bias_dram_window_lengths, {i_m0, 0});
