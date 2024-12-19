@@ -377,6 +377,8 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVSAsync
                                         number<-1>{},
                                         k_oob_ck,
                                         k_pre_np);
+                    // moving k_dram_window is an in-page-block operation, so there is
+                    // no need to invoke k_page_block_navigator.move_tile_window() here.
                     if constexpr(i_k0 < k0_loops - 1)
                         move_tile_window(k_dram_window, {0, kK0});
 
@@ -697,13 +699,17 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVSAsync
                 });
             }
             i_total_loops++;
+            // load the first K tile for next iteration
             if(i_total_loops < num_total_loop)
             {
                 // move K tile windows
                 i_page_block_k = k_page_block_navigator.move_tile_window(
                     i_page_block_k, k_dram_block_window, {kN0, 0});
 
-                k_dram_window.set_window_origin(k_dram_block_window.get_window_origin());
+                k_dram_window = make_tile_window(
+                    k_dram_block_window, Policy::template MakeKDramTileDistribution<Problem>());
+
+                k_dram_window.init_raw();
 
                 if constexpr(k1_loops >= 2 &&
                              LdsSeq.at(number<0>{}) == LdsSeq.at(number<k0_loops + k1_loops - 2>{}))
