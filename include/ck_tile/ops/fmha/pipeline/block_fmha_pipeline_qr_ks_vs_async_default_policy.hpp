@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2018-2024, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -8,7 +8,7 @@
 
 namespace ck_tile {
 
-// This pipeline is qkv all located in LDS
+// This pipeline is q in register; kv all located in LDS
 using BlockFmhaPipelineQRKSVSAsyncDefaultPolicy =
     BlockFmhaPipelineQXKSVSCustomPolicy</* QLoadOnce = */ true,
                                         /* AsyncCopyK = */ true,

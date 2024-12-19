@@ -8,7 +8,7 @@
 
 namespace ck_tile {
 
-// This pipeline is qkv all located in LDS
+// This pipeline is q in register; kv all located in LDS
 struct BlockFmhaFwdSplitKVPipelineQRKSVSDefaultPolicy
     : BlockFmhaPipelineQXKSVSCustomPolicy</* QLoadOnce = */ true,
                                           /* AsyncCopyK = */ false,
