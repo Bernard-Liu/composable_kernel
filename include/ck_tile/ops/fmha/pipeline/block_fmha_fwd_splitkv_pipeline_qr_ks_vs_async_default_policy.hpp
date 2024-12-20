@@ -9,12 +9,12 @@
 namespace ck_tile {
 
 // This pipeline is q in register; kv all located in LDS
-struct BlockFmhaFwdSplitKVPipelineQRKSVSDefaultPolicy
+struct BlockFmhaFwdSplitKVPipelineQRKSVSAsyncDefaultPolicy
     : BlockFmhaPipelineQXKSVSCustomPolicy</* QLoadOnce = */ true,
-                                          /* AsyncCopyK = */ false,
+                                          /* AsyncCopyK = */ true,
                                           /* AsyncCopyV = */ false,
-                                          /* NumPrefetchK = */ 1,
-                                          /* NumPrefetchV = */ 1>
+                                          /* NumPrefetchK = */ 3,
+                                          /* NumPrefetchV = */ 3>
 {
     template <typename Problem>
     CK_TILE_HOST_DEVICE static constexpr auto GetAlignmentOacc()
