@@ -734,6 +734,7 @@ def get_fwd_splitkv_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> 
                         continue
                 if receipt == 2:
                     cond = dtype in ['fp16', 'bf16']
+                    cond &= pipeline.F_vlayout == 'row'
                     cond &= pipeline.F_bias in ['no', 'alibi']
                     cond &= pipeline.F_squant == 'f'
                     if not cond:
