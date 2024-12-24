@@ -764,9 +764,9 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
     if(mode == mode_enum::group && 0 < page_block_size)
     {
-        if(!is_v_rowmajor)
+        if(is_v_rowmajor)
         {
-            std::cerr << "make sure input layout is correct: -vlayout=r" << std::endl;
+            std::cerr << "make sure input layout is correct: -vlayout=c" << std::endl;
             return false;
         }
 
