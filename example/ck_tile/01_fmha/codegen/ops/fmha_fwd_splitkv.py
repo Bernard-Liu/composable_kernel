@@ -733,8 +733,11 @@ def get_fwd_splitkv_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> 
                     if not fnmatch.fnmatch(k.name, kernel_filter):
                         continue
                 if receipt == 2:
+                    is_chunked_prefill = (mode == 'group' and pipeline.F_pagedkv == 't')
+
                     cond = dtype in ['fp16', 'bf16']
-                    cond &= pipeline.F_vlayout == 'row'
+                    # use vlayout=row for chunked prefill
+                    cond = cond and ((pipeline.F_vlayout == 'row' and not is_chunked_prefill) or (pipeline.F_vlayout == 'col' and is_chunked_prefill))
                     cond &= pipeline.F_bias in ['no', 'alibi']
                     cond &= pipeline.F_squant == 'f'
                     if not cond:
