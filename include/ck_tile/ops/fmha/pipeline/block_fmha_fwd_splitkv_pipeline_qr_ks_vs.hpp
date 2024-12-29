@@ -454,6 +454,11 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                         });
                 }
             }
+            __builtin_amdgcn_sched_barrier(0);
+            // move K tile window
+            i_page_block_k = k_page_block_navigator.move_tile_window(
+                i_page_block_k, k_dram_block_window, {kN0, 0});
+            __builtin_amdgcn_sched_barrier(0);
 
             const auto s = cast_tile<SMPLComputeDataType>(s_acc); // S{j}
             auto m_local = block_tile_reduce<SMPLComputeDataType>(
@@ -544,6 +549,15 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                 });
             });
 
+            if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
+            {
+                __builtin_amdgcn_sched_barrier(0);
+                // move V tile window (row major)
+                i_page_block_v = v_page_block_navigator.move_tile_window(
+                    i_page_block_v, v_dram_window, {0, kK1});
+                __builtin_amdgcn_sched_barrier(0);
+            }
+
             block_sync_lds();
             if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
             {
@@ -577,8 +591,15 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                 store_tile(v_lds_window,
                            tile_elementwise_in(v_element_func, v_prefetch)); // store the prefetch
             }
-            i_page_block_v =
-                v_page_block_navigator.move_tile_window(i_page_block_v, v_dram_window, {0, kK1});
+
+            if constexpr(!std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
+            {
+                __builtin_amdgcn_sched_barrier(0);
+                // move V tile window (column major)
+                i_page_block_v = v_page_block_navigator.move_tile_window(
+                    i_page_block_v, v_dram_window, {0, kK1});
+                __builtin_amdgcn_sched_barrier(0);
+            }
 
             const auto p =
                 cast_tile<PDataType>(tile_elementwise_in(p_compute_element_func, p_compute));
@@ -633,9 +654,7 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                         i_page_block_v_, v_dram_window_, {0, kK1});
                 });
             }
-            // move K tile windows
-            i_page_block_k = k_page_block_navigator.move_tile_window(
-                i_page_block_k, k_dram_block_window, {kN0, 0});
+
             // tail
             {
                 block_sync_lds();
