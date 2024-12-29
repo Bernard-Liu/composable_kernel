@@ -454,6 +454,11 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                         });
                 }
             }
+            __builtin_amdgcn_sched_barrier(0);
+            // move K tile window
+            i_page_block_k = k_page_block_navigator.move_tile_window(
+                i_page_block_k, k_dram_block_window, {kN0, 0});
+            __builtin_amdgcn_sched_barrier(0);
 
             const auto s = cast_tile<SMPLComputeDataType>(s_acc); // S{j}
             auto m_local = block_tile_reduce<SMPLComputeDataType>(
@@ -633,9 +638,7 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                         i_page_block_v_, v_dram_window_, {0, kK1});
                 });
             }
-            // move K tile windows
-            i_page_block_k = k_page_block_navigator.move_tile_window(
-                i_page_block_k, k_dram_block_window, {kN0, 0});
+
             // tail
             {
                 block_sync_lds();
