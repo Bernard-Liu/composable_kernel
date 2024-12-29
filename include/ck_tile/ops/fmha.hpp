@@ -16,7 +16,6 @@
 #include "ck_tile/ops/fmha/kernel/fmha_fwd_splitkv_combine_kernel.hpp"
 #include "ck_tile/ops/fmha/kernel/fmha_fwd_splitkv_combine_tile_partitioner.hpp"
 #include "ck_tile/ops/fmha/kernel/fmha_fwd_splitkv_kernel.hpp"
-#include "ck_tile/ops/fmha/kernel/fmha_fwd_splitkv_tile_partitioner.hpp"
 #include "ck_tile/ops/fmha/kernel/fmha_fwd_tile_partitioner.hpp"
 #include "ck_tile/ops/fmha/pipeline/block_fmha_bwd_convert_dq.hpp"
 #include "ck_tile/ops/fmha/pipeline/block_fmha_bwd_dot_do_o.hpp"
