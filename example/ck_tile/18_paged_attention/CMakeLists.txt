@@ -5,5 +5,4 @@ string(REGEX REPLACE "^[0-9]+_" "" TRIMMED_DIR_NAME "${DIR_NAME}")
 # add prefix "tile_example_" to the processed directory name
 set(EXAMPLE_NAME "tile_example_${TRIMMED_DIR_NAME}")
 
-message("[POYENC] example name: ${EXAMPLE_NAME}")
 add_executable(${EXAMPLE_NAME} EXCLUDE_FROM_ALL paged_attention.cpp)
