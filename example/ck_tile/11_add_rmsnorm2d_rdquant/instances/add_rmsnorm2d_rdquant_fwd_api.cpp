@@ -116,15 +116,25 @@ float add_rmsnorm2d_rdquant_fwd_b16_(add_rmsnorm2d_rdquant_fwd_traits /*t*/,
         else
             r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 4, 1, 1024, 1,  true,  true, false>>(s, a);
     }
-    else if(a.n > 4096) {
+    else if(a.n <= 8192) {
         if (a.n % 8 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 2, 1,  256, 8,  true,  true, true>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 4, 1,  256, 8,  true,  true, false>>(s, a);
         else if (a.n % 4 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 4, 1,  256, 4,  true,  true, true>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 8, 1,  256, 4,  true,  true, false>>(s, a);
         else if (a.n % 2 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 2, 1, 1024, 2,  true,  true, true>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 4, 1, 1024, 2,  true,  true, false>>(s, a);
         else
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 4, 1, 1024, 1,  true,  true, true>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 8, 1, 1024, 1,  true,  true, false>>(s, a);
+    }
+    else if(a.n > 8192) {
+        if (a.n % 8 == 0)
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 4, 1,  256, 8,  true,  true, true>>(s, a);
+        else if (a.n % 4 == 0)
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 8, 1,  256, 4,  true,  true, true>>(s, a);
+        else if (a.n % 2 == 0)
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 4, 1, 1024, 2,  true,  true, true>>(s, a);
+        else
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<data_type,  1, 8, 1, 1024, 1,  true,  true, true>>(s, a);
     }
     return r;
     // clang-format on
