@@ -20,6 +20,8 @@ float launch_and_time_kernel(const StreamConfig& stream_config,
 #if CK_TIME_KERNEL
     if(stream_config.time_kernel_)
     {
+#if 0
+        printf("HipGraph OFF\n");
         if(ck::EnvIsEnabled(CK_ENV(CK_LOGGING)))
         {
             printf("%s: grid_dim {%u, %u, %u}, block_dim {%u, %u, %u} \n",
@@ -70,6 +72,53 @@ float launch_and_time_kernel(const StreamConfig& stream_config,
         hip_check_error(hipEventDestroy(stop));
 
         return total_time / nrepeat;
+#elif 1
+        printf("HipGraph ON\n");
+        hipGraph_t graph_;
+        hipStream_t stream_;
+
+        HIP_CHECK_ERROR(hipStreamCreate(&stream_));
+        StreamConfig sc{stream_};
+
+        HIP_CHECK_ERROR(hipStreamBeginCapture(sc.stream_id_, hipStreamCaptureModeGlobal));
+        for(int i_r = 0; i_r < stream_config.nrepeat_; i_r++)
+        {
+            kernel<<<grid_dim, block_dim, lds_byte, sc.stream_id_>>>(args...);
+        }
+        HIP_CHECK_ERROR(hipStreamEndCapture(sc.stream_id_, &graph_));
+
+        hipGraphExec_t instance_;
+        HIP_CHECK_ERROR(hipGraphInstantiate(&instance_, graph_, nullptr, nullptr, 0));
+
+        hipEvent_t start_, stop_;
+
+        HIP_CHECK_ERROR(hipEventCreate(&start_));
+        HIP_CHECK_ERROR(hipEventCreate(&stop_));
+
+        // warm-up
+        for(int i_r = 0; i_r < stream_config.cold_niters_; i_r++)
+        {
+            kernel<<<grid_dim, block_dim, lds_byte, sc.stream_id_>>>(args...);
+        }
+        HIP_CHECK_ERROR(hipDeviceSynchronize());
+
+        HIP_CHECK_ERROR(hipEventRecord(start_, sc.stream_id_));
+
+        HIP_CHECK_ERROR(hipGraphLaunch(instance_, sc.stream_id_));
+
+        HIP_CHECK_ERROR(hipEventRecord(stop_, sc.stream_id_));
+        HIP_CHECK_ERROR(hipEventSynchronize(stop_));
+
+        HIP_CHECK_ERROR(hipGetLastError());
+
+        HIP_CHECK_ERROR(hipGraphDestroy(graph_));
+
+        float total_time = 0;
+
+        HIP_CHECK_ERROR(hipEventElapsedTime(&total_time, start_, stop_));
+
+        return total_time / stream_config.nrepeat_;
+#endif
     }
     else
     {

@@ -39,6 +39,7 @@ __global__ void
     // __attribute__((amdgpu_waves_per_eu(1, 1)))
     kernel_gemm_xdl_cshuffle_v3_multi_d_b_preshuffle(typename GridwiseGemm::Argument karg)
 {
+    return;
 #if(!defined(__HIP_DEVICE_COMPILE__) || defined(__gfx9__))
     __shared__ char p_shared[GridwiseGemm::GetSharedMemoryNumberOfByte()];
     __shared__ char p_shared1[GridwiseGemm::GetSharedMemoryNumberOfByte()];
