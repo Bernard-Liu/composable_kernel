@@ -89,7 +89,7 @@ struct AddRmsnorm2dRdquantFwdPipelineOnePass
 
         auto x = tile_elementwise_in(
             [&](const auto& a_, const auto& b_) {
-                return type_convert<ComputeDataType>(a_) + type_convert<ComputeDataType>(b_);
+                return type_convert<ComputeDataType>(a_+b_);
             },
             a,
             b);
@@ -157,7 +157,7 @@ struct AddRmsnorm2dRdquantFwdPipelineOnePass
         sweep_tile(qy, [&, yscale_ = yscale](auto idx) {
             constexpr auto i_idx = make_tuple(idx[number<0>{}]);
             auto qy_             = y[idx] / yscale_[i_idx];
-            qy(idx)              = saturates<QYDataType>{}(qy_);
+            qy(idx)              = type_convert<QYDataType>(saturates<QYDataType>{}(qy_));
         });
         store_tile(qy_window, qy);
     }

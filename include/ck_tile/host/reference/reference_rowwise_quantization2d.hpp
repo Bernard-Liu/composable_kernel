@@ -22,12 +22,7 @@ CK_TILE_HOST void reference_rowwise_quantization2d(const HostTensor<XDataType>& 
             // scale = amax / 127 for int8
             auto v_scale = type_convert<XDataType>(scale_m(m));
             auto v_qx    = v_x / v_scale;
-            qx_m_n(m, n) = saturates<QXDataType>{}(v_qx);
-
-            if(m == 0 && n == 4)
-                printf("Qy: %lf, Satruates Qy: %lf\n",
-                       type_convert<float>(v_qx),
-                       type_convert<float>(qx_m_n(m, n)));
+            qx_m_n(m, n) = type_convert<QXDataType>(saturates<QXDataType>{}(v_qx));
         }
     };
 

@@ -122,9 +122,9 @@ float add_rmsnorm2d_rdquant_fwd_b16_(add_rmsnorm2d_rdquant_fwd_traits t,
         if(a.n<8192){
         if(t.save_x){
         if (a.n % 8 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  256, 8,  true,  true, false>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 2, 1,  512, 8,  true,  true, false>>(s, a);
         else if (a.n % 4 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 8, 1,  256, 4,  true,  true, false>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  512, 4,  true,  true, false>>(s, a);
         else if (a.n % 2 == 0)
             r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1, 1024, 2,  true,  true, false>>(s, a);
         else
@@ -132,9 +132,9 @@ float add_rmsnorm2d_rdquant_fwd_b16_(add_rmsnorm2d_rdquant_fwd_traits t,
         }
         else{
             if (a.n % 8 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  256, 8,  true,  false, false>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 2, 1,  512, 8,  true,  false, false>>(s, a);
         else if (a.n % 4 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 8, 1,  256, 4,  true,  false, false>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  512, 4,  true,  false, false>>(s, a);
         else if (a.n % 2 == 0)
             r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1, 1024, 2,  true,  false, false>>(s, a);
         else
@@ -143,9 +143,9 @@ float add_rmsnorm2d_rdquant_fwd_b16_(add_rmsnorm2d_rdquant_fwd_traits t,
         }
         else{
             if (a.n % 8 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  256, 8,  false,  false, false>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 2, 1,  512, 8,  false,  false, false>>(s, a);
         else if (a.n % 4 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 8, 1,  256, 4,  false,  false, false>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  512, 4,  false,  false, false>>(s, a);
         else if (a.n % 2 == 0)
             r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1, 1024, 2,  false,  false, false>>(s, a);
         else
@@ -154,9 +154,9 @@ float add_rmsnorm2d_rdquant_fwd_b16_(add_rmsnorm2d_rdquant_fwd_traits t,
     }
     else if(a.n > 8192) {
         if (a.n % 8 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  256, 8,  true,  true, true>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 2, 1,  512, 8,  true,  true, true>>(s, a);
         else if (a.n % 4 == 0)
-            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 8, 1,  256, 4,  true,  true, true>>(s, a);
+            r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1,  512, 4,  true,  true, true>>(s, a);
         else if (a.n % 2 == 0)
             r = add_rmsnorm2d_rdquant_fwd_<trait_<input_data_type, quantized_data_type,  1, 4, 1, 1024, 2,  true,  true, true>>(s, a);
         else
