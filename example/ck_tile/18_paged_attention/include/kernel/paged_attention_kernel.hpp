@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <hip/hip_bf16.h>
 #include "cuda_compat.h"
 
