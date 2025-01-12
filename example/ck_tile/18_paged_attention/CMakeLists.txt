@@ -42,11 +42,15 @@ endif()
 # Use find_package() to locate Torch
 find_package(Torch REQUIRED)
 
-add_executable(${EXAMPLE_NAME} EXCLUDE_FROM_ALL main.cpp itfs/paged_attention.cpp)
+add_executable(${EXAMPLE_NAME} EXCLUDE_FROM_ALL
+  main.cpp
+  itfs/paged_attention.cpp
+)
 target_include_directories(${EXAMPLE_NAME} 
   AFTER PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(${EXAMPLE_NAME}
   SYSTEM PRIVATE ${TORCH_INCLUDE_DIRS})
+target_link_libraries(${EXAMPLE_NAME} "${TORCH_LIBRARIES}")
 target_compile_definitions(${EXAMPLE_NAME} PRIVATE USE_ROCM)
 target_compile_options(${EXAMPLE_NAME} PRIVATE
   ${TORCH_CXX_FLAGS}
@@ -56,4 +60,5 @@ target_compile_options(${EXAMPLE_NAME} PRIVATE
   -Wno-old-style-cast
   -Wno-deprecated-copy
   -Wno-shadow
+  -Wno-conditional-uninitialized
 )
