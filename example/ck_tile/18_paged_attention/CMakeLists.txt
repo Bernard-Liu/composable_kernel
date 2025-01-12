@@ -53,7 +53,9 @@ target_include_directories(${EXAMPLE_NAME}
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include # ignore compilation warnings in kernel implementation
 )
 target_link_libraries(${EXAMPLE_NAME} "${TORCH_LIBRARIES}")
-target_compile_definitions(${EXAMPLE_NAME} PRIVATE USE_ROCM)
+target_compile_definitions(${EXAMPLE_NAME} 
+  PRIVATE USE_ROCM
+)
 target_compile_options(${EXAMPLE_NAME}
   PRIVATE ${TORCH_CXX_FLAGS}
 )

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <torch/torch.h>
+#include <c10/cuda/CUDAGuard.h>
 
 #include <hip/hip_runtime.h>
 
@@ -42,7 +43,6 @@ void paged_attention(
     const c10::optional<torch::Tensor>& fp8_out_scale,
     int64_t partition_size)
 {
-
     native::paged_attention_traits traits;
 
     traits.q_type         = (query.dtype() == at::ScalarType::Half ? native::ScalarType::Half
@@ -50,8 +50,6 @@ void paged_attention(
     traits.kv_cache_dtype = kv_cache_dtype;
 
     native::paged_attention_args args;
-
-    args.head_size = query.size(2);
 
     args.num_seqs               = query.size(0);
     args.num_heads              = query.size(1);
@@ -88,10 +86,8 @@ void paged_attention(
     args.k_scale         = k_scale;
     args.v_scale         = v_scale;
 
-    hipStream_t stream = nullptr;
-    HIP_CHECK_ERROR(hipStreamCreate(&stream));
+    const at::cuda::OptionalCUDAGuard device_guard(device_of(query));
+    const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
     native::paged_attention(traits, args, stream);
-
-    HIP_CHECK_ERROR(hipStreamDestroy(stream));
 }
