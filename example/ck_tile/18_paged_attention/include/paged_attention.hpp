@@ -21,13 +21,6 @@ inline std::ostream& operator<<(std::ostream& stream, ScalarType scalar_type)
     return stream;
 }
 
-enum class Fp8KVCacheDataType
-{
-    kAuto    = 0,
-    kFp8E4M3 = 1,
-    kFp8E5M2 = 2,
-};
-
 struct paged_attention_traits
 {
     ScalarType q_type;
