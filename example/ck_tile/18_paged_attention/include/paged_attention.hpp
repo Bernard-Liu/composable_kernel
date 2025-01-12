@@ -1,8 +1,10 @@
 #pragma once
 
-#include <hip/hip_runtime.h>
 #include <iostream>
 
+#include <hip/hip_runtime.h>
+
+namespace native {
 enum class ScalarType {
     Half,
     BFloat16,
@@ -50,7 +52,7 @@ struct paged_attention_args {
     void* value_cache_ptr;
     int* block_tables_ptr;
     int* context_lens_ptr;
-    float* fp8_out_scale_ptr;
+    const float* fp8_out_scale_ptr;
     void* out_ptr;
 
     int64_t block_size;
@@ -61,8 +63,9 @@ struct paged_attention_args {
     int64_t partition_size;
 };
 
-void paged_attention_api(
+void paged_attention(
     const paged_attention_traits& traits, 
     const paged_attention_args& args, 
     hipStream_t stream
 );
+}

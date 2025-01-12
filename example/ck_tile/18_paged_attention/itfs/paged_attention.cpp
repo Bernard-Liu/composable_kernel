@@ -16,9 +16,10 @@
 
 #include <torch/torch.h>
 
+#include <hip/hip_runtime.h>
+
 #include "paged_attention.hpp"
 #include "kernel/paged_attention_kernel.hpp"
-#include "ck_tile/host/hip_check_error.hpp"
 
 #define LAUNCH_CUSTOM_ATTENTION(GQA_RATIO)                                    \
   paged_attention_ll4mi_QKV_kernel<T, KVT, KV_DTYPE, OUTT, BLOCK_SIZE,        \
@@ -37,11 +38,11 @@
           out_ptr, args.exp_sums_ptr, args.max_logits_ptr, tmp_out_ptr,        \
           args.context_lens_ptr, max_num_partitions, args.fp8_out_scale_ptr);
 
+namespace {
 template <typename T, typename KVT, vllm::Fp8KVCacheDataType KV_DTYPE,
           int BLOCK_SIZE, int HEAD_SIZE, typename OUTT, int PARTITION_SIZE>
 void paged_attention_custom_launcher(
-    const paged_attention_traits& traits, 
-    const paged_attention_args& args, 
+    const native::paged_attention_args& args,
     hipStream_t stream) {
   
   T* tmp_out_ptr = reinterpret_cast<T*>(args.tmp_out_ptr);
@@ -156,11 +157,12 @@ void paged_attention_custom_launcher(
     }
   }
 }
+}
 
 #define CALL_CUSTOM_LAUNCHER(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT,      \
                              PSIZE)                                            \
   paged_attention_custom_launcher<T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE, OUTT, \
-                                  PSIZE>(traits, args, stream);
+                                  PSIZE>(args, stream);
 
 #define CALL_CUSTOM_LAUNCHER_PSIZE(T, KVT, KV_DTYPE, BLK_SIZE, HEAD_SIZE,     \
                                    OUTT)                                      \
@@ -218,59 +220,13 @@ void paged_attention_custom_launcher(
       break;                                                    \
   }
 
-/*
+namespace native {
 void paged_attention(
-    torch::Tensor& out,         // [num_seqs, num_heads, head_size]
-    torch::Tensor& exp_sums,    // [num_seqs, num_heads, max_num_partitions]
-    torch::Tensor& max_logits,  // [num_seqs, num_heads, max_num_partitions]
-    torch::Tensor&
-        tmp_out,  // [num_seqs, num_heads, max_num_partitions, head_size]
-    torch::Tensor& query,  // [num_seqs, num_heads, head_size]
-    torch::Tensor&
-        key_cache,  // [num_blocks, num_heads, head_size/x, block_size, x]
-    torch::Tensor&
-        value_cache,  // [num_blocks, num_heads, head_size, block_size]
-    int64_t num_kv_heads, double scale,
-    torch::Tensor& block_tables,  // [num_seqs, max_num_blocks_per_seq]
-    torch::Tensor& context_lens,  // [num_seqs]
-    int64_t block_size, int64_t max_context_len,
-    const c10::optional<torch::Tensor>& alibi_slopes,
-    const std::string& kv_cache_dtype, double k_scale, double v_scale,
-    const c10::optional<torch::Tensor>& fp8_out_scale, int64_t partition_size) {
-  const int head_size = query.size(2);
-  if (kv_cache_dtype == "auto") {
-    if (query.dtype() == at::ScalarType::Half) {
-      CALL_CUSTOM_LAUNCHER_BLK_HEAD(_Float16, _Float16,
-                                    vllm::Fp8KVCacheDataType::kAuto);
-    } else if (query.dtype() == at::ScalarType::BFloat16) {
-      CALL_CUSTOM_LAUNCHER_BLK_HEAD(__hip_bfloat16, __hip_bfloat16,
-                                    vllm::Fp8KVCacheDataType::kAuto);
-    } else {
-      TORCH_CHECK(false, "Unsupported data type: ", query.dtype());
-    }
-  } else if (kv_cache_dtype == "fp8" || kv_cache_dtype == "fp8_e4m3") {
-    if (query.dtype() == at::ScalarType::Half) {
-      CALL_CUSTOM_LAUNCHER_BLK_HEAD(_Float16, uint8_t,
-                                    vllm::Fp8KVCacheDataType::kFp8E4M3);
-    } else if (query.dtype() == at::ScalarType::BFloat16) {
-      CALL_CUSTOM_LAUNCHER_BLK_HEAD(__hip_bfloat16, uint8_t,
-                                    vllm::Fp8KVCacheDataType::kFp8E4M3);
-    } else {
-      TORCH_CHECK(false, "Unsupported data type: ", query.dtype());
-    }
-  } else {
-    TORCH_CHECK(false, "Unsupported KV cache dtype: ", kv_cache_dtype);
-  }
-}
-*/
-
-void paged_attention_api(
     const paged_attention_traits& traits, 
     const paged_attention_args& args, 
     hipStream_t stream
 )
 {
-  const int head_size = args.head_size;
   if (traits.kv_cache_dtype == "auto") {
     if (traits.q_type == ScalarType::Half) {
       CALL_CUSTOM_LAUNCHER_BLK_HEAD(_Float16, _Float16,
@@ -294,4 +250,5 @@ void paged_attention_api(
   } else {
     TORCH_CHECK(false, "Unsupported KV cache dtype: ", traits.kv_cache_dtype);
   }
+}
 }

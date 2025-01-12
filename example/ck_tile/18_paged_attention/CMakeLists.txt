@@ -45,20 +45,15 @@ find_package(Torch REQUIRED)
 add_executable(${EXAMPLE_NAME} EXCLUDE_FROM_ALL
   main.cpp
   itfs/paged_attention.cpp
+  # py_itfs/paged_attention.cu
 )
 target_include_directories(${EXAMPLE_NAME} 
-  AFTER PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(${EXAMPLE_NAME}
-  SYSTEM PRIVATE ${TORCH_INCLUDE_DIRS})
+  SYSTEM AFTER 
+  PRIVATE ${TORCH_INCLUDE_DIRS}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include # ignore compilation warnings in kernel implementation
+)
 target_link_libraries(${EXAMPLE_NAME} "${TORCH_LIBRARIES}")
 target_compile_definitions(${EXAMPLE_NAME} PRIVATE USE_ROCM)
-target_compile_options(${EXAMPLE_NAME} PRIVATE
-  ${TORCH_CXX_FLAGS}
-  -Wno-undefined-reinterpret-cast
-  -Wno-unused-variable
-  -Wno-unused-parameter
-  -Wno-old-style-cast
-  -Wno-deprecated-copy
-  -Wno-shadow
-  -Wno-conditional-uninitialized
+target_compile_options(${EXAMPLE_NAME}
+  PRIVATE ${TORCH_CXX_FLAGS}
 )
