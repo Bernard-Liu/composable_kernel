@@ -5,37 +5,43 @@
 #include <hip/hip_runtime.h>
 
 namespace native {
-enum class ScalarType {
+enum class ScalarType
+{
     Half,
     BFloat16,
 };
 
-inline std::ostream& operator<<(std::ostream& stream, ScalarType scalar_type) {
-    switch(scalar_type) {
+inline std::ostream& operator<<(std::ostream& stream, ScalarType scalar_type)
+{
+    switch(scalar_type)
+    {
     case ScalarType::Half: stream << "Half"; break;
     case ScalarType::BFloat16: stream << "BFloat16"; break;
     }
     return stream;
-} 
+}
 
-enum class Fp8KVCacheDataType {
-  kAuto = 0,
-  kFp8E4M3 = 1,
-  kFp8E5M2 = 2,
+enum class Fp8KVCacheDataType
+{
+    kAuto    = 0,
+    kFp8E4M3 = 1,
+    kFp8E5M2 = 2,
 };
 
-struct paged_attention_traits {
+struct paged_attention_traits
+{
     ScalarType q_type;
     std::string kv_cache_dtype;
 };
 
-struct paged_attention_args {
+struct paged_attention_args
+{
     int head_size;
 
     int num_seqs;
     int num_heads;
     int num_kv_heads;
-    
+
     int max_num_blocks_per_seq;
     int q_stride;
     int kv_block_stride;
@@ -63,9 +69,7 @@ struct paged_attention_args {
     int64_t partition_size;
 };
 
-void paged_attention(
-    const paged_attention_traits& traits, 
-    const paged_attention_args& args, 
-    hipStream_t stream
-);
-}
+void paged_attention(const paged_attention_traits& traits,
+                     const paged_attention_args& args,
+                     hipStream_t stream);
+} // namespace native
