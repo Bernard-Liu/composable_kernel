@@ -1017,8 +1017,3 @@ __launch_bounds__(NUM_THREADS) void paged_attention_ll4mi_reduce_kernel(
     const float* __restrict__ fp8_out_scale_ptr){UNREACHABLE_CODE}
 
 #endif  // defined(__HIP__MI300_MI250__) TODO: Add NAVI support
-
-#undef WARP_SIZE
-#undef MAX
-#undef MIN
-#undef DIVIDE_ROUND_UP
