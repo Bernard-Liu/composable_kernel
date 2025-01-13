@@ -19,7 +19,7 @@
 #include <hip/hip_runtime.h>
 
 #include "paged_attention.hpp"
-#include "kernel/paged_attention_kernel.hpp"
+#include "paged_attention_kernel.hpp"
 
 #define LAUNCH_CUSTOM_ATTENTION(GQA_RATIO)                        \
     paged_attention_ll4mi_QKV_kernel<T,                           \
