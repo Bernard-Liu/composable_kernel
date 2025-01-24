@@ -149,8 +149,8 @@ struct GemmPipelineAGmemBGmemCRegV1
                                         const BDramBlockWindowTmp& b_dram_block_window_tmp,
                                         const BElementFunction& b_element_func,
                                         index_t num_loop,
-                                        void* __restrict__ p_smem_0,
-                                        void* __restrict__ p_smem_1) 
+                                        void* p_smem_0,
+                                        void* p_smem_1) 
     {
         static_assert(
             std::is_same_v<ADataType, remove_cvref_t<typename ADramBlockWindowTmp::DataType>> &&
@@ -238,8 +238,12 @@ struct GemmPipelineAGmemBGmemCRegV1
 
         block_sync_lds();
         
-        constexpr auto ALdsTileDistr = decltype(Policy::template BlockGemm<Problem>::MakeABlockDistribution()){};
-        constexpr auto BLdsTileDistr = decltype(Policy::template BlockGemm<Problem>::MakeBBlockDistribution()){};
+        // constexpr auto ALdsTileDistr = decltype(Policy::template BlockGemm<Problem>::MakeABlockDistribution()){};
+        // constexpr auto BLdsTileDistr = decltype(Policy::template BlockGemm<Problem>::MakeBBlockDistribution()){};
+        constexpr auto ALdsTileDistr = decltype(make_static_tile_distribution(
+                Policy::template BlockGemm<Problem>::MakeABlockDistributionEncode())){};
+            constexpr auto BLdsTileDistr = decltype(make_static_tile_distribution(
+                Policy::template BlockGemm<Problem>::MakeBBlockDistributionEncode())){};
         using ALdsTile = decltype(make_static_distributed_tensor<ADataType>(ALdsTileDistr));
         using BLdsTile = decltype(make_static_distributed_tensor<BDataType>(BLdsTileDistr));
         ALdsTile a_block_tile0;
@@ -359,8 +363,8 @@ struct GemmPipelineAGmemBGmemCRegV1
     CK_TILE_DEVICE static auto run(const ADramBlockWindowTmp& a_dram_block_window_tmp,
                                    const BDramBlockWindowTmp& b_dram_block_window_tmp,
                                    index_t num_loop,
-                                   void*__restrict__ p_smem_0,
-                                   void*__restrict__ p_smem_1)
+                                   void* p_smem_0,
+                                   void* p_smem_1)
     {
         return run(
             a_dram_block_window_tmp,

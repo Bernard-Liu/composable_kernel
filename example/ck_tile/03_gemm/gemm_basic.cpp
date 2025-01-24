@@ -69,12 +69,11 @@ float gemm_calc(const gemm_basic_args& args, const ck_tile::stream_config& s)
             ck_tile::Default2DEpilogueProblem<AccDataType, CDataType, kPadM, kPadN>>>;
 
     using CodegenGemmTraits =
-        ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, CLayout>;
+        ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, CLayout, true, 3>;
     using CodegenPipelineProblem = ck_tile::
         GemmPipelineProblem<ADataType, BDataType, AccDataType, CodegenGemmShape, CodegenGemmTraits>;
-    using CodegenGemmPolicy = ck_tile::UniversalGemmPipelineAgBgCrPolicy;
     using CodegenGemmPipeline =
-        ck_tile::GemmPipelineAGmemBGmemCRegV1<CodegenPipelineProblem, CodegenGemmPolicy>;
+        ck_tile::GemmPipelineAGmemBGmemCRegV1<CodegenPipelineProblem>;
     // ToDo: Will add the codegen part to test different pipeline policies in GEMM.
     // Now we only use the BlockGemmASmemBSmemCRegV1DefaultPolicy.
     using Kernel = ck_tile::GemmKernel<TilePartitioner, CodegenGemmPipeline, GemmEpilogue>;
@@ -91,11 +90,6 @@ float gemm_calc(const gemm_basic_args& args, const ck_tile::stream_config& s)
 
     const dim3 grids      = Kernel::GridSize(args.M, args.N, args.kbatch);
     constexpr dim3 blocks = Kernel::BlockSize();
-
-    if(!Kernel::IsSupportedArgument(kargs))
-    {
-        throw std::runtime_error("Wrong! Arguments not supported! Skipping gemm!\n");
-    }
 
     if(s.log_level_ > 0)
     {
