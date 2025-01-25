@@ -149,8 +149,8 @@ struct GemmPipelineAGmemBGmemCRegV1
                                         const BDramBlockWindowTmp& b_dram_block_window_tmp,
                                         const BElementFunction& b_element_func,
                                         index_t num_loop,
-                                        void* p_smem_0,
-                                        void* p_smem_1) 
+                                        void* __restrict__ p_smem_0,
+                                        void* __restrict__ p_smem_1) 
     {
         static_assert(
             std::is_same_v<ADataType, remove_cvref_t<typename ADramBlockWindowTmp::DataType>> &&
@@ -363,8 +363,8 @@ struct GemmPipelineAGmemBGmemCRegV1
     CK_TILE_DEVICE static auto run(const ADramBlockWindowTmp& a_dram_block_window_tmp,
                                    const BDramBlockWindowTmp& b_dram_block_window_tmp,
                                    index_t num_loop,
-                                   void* p_smem_0,
-                                   void* p_smem_1)
+                                   void* __restrict__ p_smem_0,
+                                   void* __restrict__ p_smem_1)
     {
         return run(
             a_dram_block_window_tmp,
