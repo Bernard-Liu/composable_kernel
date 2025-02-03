@@ -713,7 +713,7 @@ def process_results(Map conf=[:]){
 }
 
 //launch develop branch daily at 23:00 UT in FULL_QA mode and at 19:00 UT with latest staging compiler version
-CRON_SETTINGS = BRANCH_NAME == "develop" ? '''0 23 * * * % RUN_FULL_QA=true;ROCMVERSION=6.3;RUN_CK_TILE_FMHA_TESTS=true;RUN_CK_TILE_GEMM_TESTS=true
+CRON_SETTINGS = BRANCH_NAME == "develop" ? '''0 23 * * * % RUN_FULL_QA=true;ROCMVERSION=6.3;RUN_CK_TILE_FMHA_TESTS=true;RUN_CK_TILE_FLEX_ATTENSION_TESTS=true;RUN_CK_TILE_GEMM_TESTS=true
                                               0 21 * * * % ROCMVERSION=6.3;hipTensor_test=true;RUN_CODEGEN_TESTS=true
                                               0 19 * * * % BUILD_DOCKER=true;DL_KERNELS=true;COMPILER_VERSION=amd-staging;BUILD_COMPILER=/llvm-project/build/bin/clang++;USE_SCCACHE=false;NINJA_BUILD_TRACE=true
                                               0 17 * * * % BUILD_DOCKER=true;DL_KERNELS=true;COMPILER_VERSION=amd-mainline;BUILD_COMPILER=/llvm-project/build/bin/clang++;USE_SCCACHE=false;NINJA_BUILD_TRACE=true
@@ -795,7 +795,7 @@ pipeline {
             description: "Run the ck_tile FMHA tests (default: OFF)")
         booleanParam(
             name: "RUN_CK_TILE_FLEX_ATTENSION_TESTS",
-            defaultValue: false,
+            defaultValue: true,
             description: "Run the ck_tile FLEX ATTENTION tests (default: OFF)")
         booleanParam(
             name: "RUN_CK_TILE_GEMM_TESTS",
@@ -994,20 +994,20 @@ pipeline {
 
 
 
-            
+
             parallel
             {
                 stage("Run RUN_CK_TILE_FLEX_ATTENSION_TESTS Tests on gfx90a")
                 {
                     when {
                         beforeAgent true
-                        expression { params.RUN_CK_TILE_FLEX_ATTENSION_TESTS.toBoolean() }
+                        expression { params.RUN_CK_TILE_FLEX_ATTENSION_TESTS.toBoolean() } // false 
                     }
                     agent{ label rocmnode("gfx90a") }
                     environment{
                         setup_args = "NO_CK_BUILD"
                         execute_args = """ ../script/cmake-ck-dev.sh  ../ gfx90a && \
-                                           make -j64 tile_example_fmha_fwd && \
+                                           make -j64 tile_example_flexattn_fwd && \
                                            cd ../ &&
                                            example/ck_tile/18_flexattn/script/run_full_test.sh "CI_${params.COMPILER_VERSION}" "${env.BRANCH_NAME}" "${NODE_NAME}" gfx90a """
                     }
