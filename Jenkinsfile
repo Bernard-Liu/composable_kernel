@@ -794,6 +794,10 @@ pipeline {
             defaultValue: false,
             description: "Run the ck_tile FMHA tests (default: OFF)")
         booleanParam(
+            name: "RUN_CK_TILE_FLEX_ATTENSION_TESTS",
+            defaultValue: false,
+            description: "Run the ck_tile FLEX ATTENTION tests (default: OFF)")
+        booleanParam(
             name: "RUN_CK_TILE_GEMM_TESTS",
             defaultValue: true,
             description: "Run the ck_tile GEMM tests (default: ON)")
@@ -976,6 +980,31 @@ pipeline {
                                            make -j64 tile_example_fmha_fwd tile_example_fmha_bwd && \
                                            cd ../ &&
                                            example/ck_tile/01_fmha/script/run_full_test.sh "CI_${params.COMPILER_VERSION}" "${env.BRANCH_NAME}" "${NODE_NAME}" gfx942 """
+                    }
+                    steps{
+                        buildHipClangJobAndReboot(setup_args:setup_args, no_reboot:true, build_type: 'Release', execute_cmd: execute_args)
+                        cleanWs()
+                    }
+                }
+            }
+        }
+        stage("Run RUN_CK_TILE_FLEX_ATTENSION_TESTS Tests")
+        {
+            parallel
+            {
+                stage("Run RUN_CK_TILE_FLEX_ATTENSION_TESTS Tests on gfx90a")
+                {
+                    when {
+                        beforeAgent true
+                        expression { params.RUN_CK_TILE_FLEX_ATTENSION_TESTS.toBoolean() }
+                    }
+                    agent{ label rocmnode("gfx90a") }
+                    environment{
+                        setup_args = "NO_CK_BUILD"
+                        execute_args = """ ../script/cmake-ck-dev.sh  ../ gfx90a && \
+                                           make -j64 tile_example_fmha_fwd && \
+                                           cd ../ &&
+                                           example/ck_tile/18_flexattn/script/run_full_test.sh "CI_${params.COMPILER_VERSION}" "${env.BRANCH_NAME}" "${NODE_NAME}" gfx90a """
                     }
                     steps{
                         buildHipClangJobAndReboot(setup_args:setup_args, no_reboot:true, build_type: 'Release', execute_cmd: execute_args)
