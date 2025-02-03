@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2018-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #include "fmha_fwd.hpp"
 #include "ck_tile/host.hpp"
@@ -849,9 +849,9 @@ bool run(const ck_tile::ArgParser& arg_parser)
         }
         else // fmha_fwd_traits or fmha_splitkv_traits
         {
-            traits.is_group_mode       = (mode == mode_enum::group);
-            traits.mask_type = mask.type;
-            traits.bias_type = bias.type;
+            traits.is_group_mode = (mode == mode_enum::group);
+            traits.mask_type     = mask.type;
+            traits.bias_type     = bias.type;
             // traits.has_lse             = lse;
             // traits.do_fp8_static_quant = squant;
 
@@ -1504,13 +1504,13 @@ bool run(const ck_tile::ArgParser& arg_parser)
                         mask.type == mask_enum::mask_top_left));
         }
 
-        auto pre_softmax = [] (auto s) {
-            //ck_tile::detail::swallow(s);
+        auto pre_softmax = [](auto s) {
+            // ck_tile::detail::swallow(s);
             return CK_PRE_SOFTMAX_F;
         };
         s_host_ref.ForEach([&](auto& self, auto i) {
             auto new_val = pre_softmax(self(i));
-            self(i) = new_val;
+            self(i)      = new_val;
         });
 
         if(lse)
