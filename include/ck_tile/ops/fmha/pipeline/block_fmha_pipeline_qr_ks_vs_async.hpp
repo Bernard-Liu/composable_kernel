@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2018-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -13,7 +13,9 @@
 namespace ck_tile {
 
 // a variation of qr/ks/vs, where we use async copy to load k (potentially v in the future)
-template <typename Problem_, typename Policy_ = BlockFmhaPipelineQRKSVSAsyncDefaultPolicy, typename PreSoftmaxFunction_>
+template <typename Problem_,
+          typename Policy_ = BlockFmhaPipelineQRKSVSAsyncDefaultPolicy,
+          typename PreSoftmaxFunction_>
 struct BlockFmhaPipelineQRKSVSAsync
 {
     using Problem               = remove_cvref_t<Problem_>;
