@@ -988,7 +988,7 @@ pipeline {
                 }
             }
         }
-        stage("Run RUN_CK_TILE_FLEX_ATTENSION_TESTS Tests")
+        stage("Run RUN_CK_TILE_FLEX_ATTENSION_TESTS Test")
         {
             parallel
             {
