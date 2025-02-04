@@ -349,6 +349,7 @@ def cmake_build(Map conf=[:]){
             echo "could not locate the requested artifacts: ${err.getMessage()}. will skip the stashing."
         }
     }
+    // TODO: Do we do same for flex attention?
     if (params.RUN_CK_TILE_GEMM_TESTS){
         try{
             archiveArtifacts "perf_tile_gemm_*.log"
@@ -713,7 +714,7 @@ def process_results(Map conf=[:]){
 }
 
 //launch develop branch daily at 23:00 UT in FULL_QA mode and at 19:00 UT with latest staging compiler version
-CRON_SETTINGS = BRANCH_NAME == "develop" ? '''0 23 * * * % RUN_FULL_QA=true;ROCMVERSION=6.3;RUN_CK_TILE_FMHA_TESTS=true;;RUN_CK_TILE_GEMM_TESTS=true
+CRON_SETTINGS = BRANCH_NAME == "develop" ? '''0 23 * * * % RUN_FULL_QA=true;ROCMVERSION=6.3;RUN_CK_TILE_FMHA_TESTS=true;RUN_CK_TILE_FLEX_ATTENTION_TESTS=true;RUN_CK_TILE_GEMM_TESTS=true
                                               0 21 * * * % ROCMVERSION=6.3;hipTensor_test=true;RUN_CODEGEN_TESTS=true
                                               0 19 * * * % BUILD_DOCKER=true;DL_KERNELS=true;COMPILER_VERSION=amd-staging;BUILD_COMPILER=/llvm-project/build/bin/clang++;USE_SCCACHE=false;NINJA_BUILD_TRACE=true
                                               0 17 * * * % BUILD_DOCKER=true;DL_KERNELS=true;COMPILER_VERSION=amd-mainline;BUILD_COMPILER=/llvm-project/build/bin/clang++;USE_SCCACHE=false;NINJA_BUILD_TRACE=true
@@ -992,7 +993,7 @@ pipeline {
         {
 
             parallel
-            {
+            {   
                 stage("Run RUN_CK_TILE_FLEX_ATTENTION_TESTS Tests on gfx90a")
                 {
                     when {
@@ -1006,6 +1007,25 @@ pipeline {
                                            make -j64 tile_example_flexattn_fwd && \
                                            cd ../ &&
                                            example/ck_tile/18_flexattn/script/run_full_test.sh "CI_${params.COMPILER_VERSION}" "${env.BRANCH_NAME}" "${NODE_NAME}" gfx90a """
+                    }
+                    steps{
+                        buildHipClangJobAndReboot(setup_args:setup_args, no_reboot:true, build_type: 'Release', execute_cmd: execute_args)
+                        cleanWs()
+                    }
+                }
+                stage("Run RUN_CK_TILE_FLEX_ATTENTION_TESTS Tests on gfx942")
+                {
+                    when {
+                        beforeAgent true
+                        expression { params.RUN_CK_TILE_FLEX_ATTENTION_TESTS.toBoolean() }
+                    }
+                    agent{ label rocmnode("gfx942") }
+                    environment{
+                        setup_args = "NO_CK_BUILD"
+                        execute_args = """ ../script/cmake-ck-dev.sh  ../ gfx942 && \
+                                           make -j64 tile_example_fmha_fwd tile_example_fmha_bwd && \
+                                           cd ../ &&
+                                           eexample/ck_tile/18_flexattn/script/run_full_test.sh "CI_${params.COMPILER_VERSION}" "${env.BRANCH_NAME}" "${NODE_NAME}" gfx942 """
                     }
                     steps{
                         buildHipClangJobAndReboot(setup_args:setup_args, no_reboot:true, build_type: 'Release', execute_cmd: execute_args)
