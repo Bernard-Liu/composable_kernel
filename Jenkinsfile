@@ -349,7 +349,20 @@ def cmake_build(Map conf=[:]){
             echo "could not locate the requested artifacts: ${err.getMessage()}. will skip the stashing."
         }
     }
-    // TODO: Do we do same for flex attention?
+    if (params.RUN_CK_TILE_FLEX_ATTENTION_TESTS){
+        try{
+            archiveArtifacts "perf_tile_flex_attn_*.log"
+            if (arch_type == 1){
+                stash includes: "perf_tile_flex_attn_**_fp16_gfx90a.log", name: "perf_tile_flex_attn_log_gfx90a"
+            }
+            else if (arch_type == 2){
+                stash includes: "perf_tile_flex_attn_**_fp16_gfx942.log", name: "perf_tile_flex_attn__gfx942"
+            }
+        }
+        catch(Exception err){
+            echo "could not locate the requested artifacts: ${err.getMessage()}. will skip the stashing."
+        }
+    }
     if (params.RUN_CK_TILE_GEMM_TESTS){
         try{
             archiveArtifacts "perf_tile_gemm_*.log"
@@ -998,7 +1011,7 @@ pipeline {
                 {
                     when {
                         beforeAgent true
-                        expression { params.RUN_CK_TILE_FLEX_ATTENTION_TESTS.toBoolean() } // false 
+                        expression { params.RUN_CK_TILE_FLEX_ATTENTION_TESTS.toBoolean() } 
                     }
                     agent{ label rocmnode("gfx90a") }
                     environment{
