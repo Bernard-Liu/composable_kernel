@@ -1023,7 +1023,7 @@ pipeline {
                     environment{
                         setup_args = "NO_CK_BUILD"
                         execute_args = """ ../script/cmake-ck-dev.sh  ../ gfx942 && \
-                                           make -j64 tile_example_fmha_fwd && \
+                                           make -j64 tile_example_flexattn_fwd && \
                                            cd ../ &&
                                            eexample/ck_tile/18_flexattn/script/run_full_test.sh "CI_${params.COMPILER_VERSION}" "${env.BRANCH_NAME}" "${NODE_NAME}" gfx942 """
                     }
