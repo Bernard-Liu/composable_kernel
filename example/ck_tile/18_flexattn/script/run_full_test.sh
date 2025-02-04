@@ -37,6 +37,7 @@ example/ck_tile/18_flexattn/script/smoke_test_fwd.sh
 #run performance benchmarks
 export fmha_fwd_log="perf_tile_flex_attn_$GPU_arch.log"
 print_log_header $fmha_fwd_log $env_type $branch $host_name
+echo "Running performance benchmark for tile_flex_attn_fwd"
 example/ck_tile/18_flexattn/script/benchmark_fwd.sh 2>&1 | tee -a $fmha_fwd_log
 
 
