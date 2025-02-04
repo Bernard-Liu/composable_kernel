@@ -356,7 +356,7 @@ def cmake_build(Map conf=[:]){
                 stash includes: "perf_tile_flex_attn_**_fp16_gfx90a.log", name: "perf_tile_flex_attn_log_gfx90a"
             }
             else if (arch_type == 2){
-                stash includes: "perf_tile_flex_attn_**_fp16_gfx942.log", name: "perf_tile_flex_attn__gfx942"
+                stash includes: "perf_tile_flex_attn_**_fp16_gfx942.log", name: "perf_tile_flex_attn_log_gfx942"
             }
         }
         catch(Exception err){
@@ -672,6 +672,15 @@ def process_results(Map conf=[:]){
                         try{
                             unstash "perf_fmha_log_gfx942"
                             unstash "perf_fmha_log_gfx90a"
+                        }
+                        catch(Exception err){
+                            echo "could not locate the FMHA performance logs: ${err.getMessage()}."
+                        }
+                    }
+                    if (params.RUN_CK_TILE_FLEX_ATTENTION_TESTS){
+                        try{
+                            unstash "perf_tile_flex_attn_log_gfx90a"
+                            unstash "perf_tile_flex_attn_log_gfx942"
                         }
                         catch(Exception err){
                             echo "could not locate the FMHA performance logs: ${err.getMessage()}."
