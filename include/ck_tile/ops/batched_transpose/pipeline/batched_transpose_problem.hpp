@@ -27,11 +27,11 @@ struct BatchedTransposeProblem
     static constexpr index_t kMPerWarp = WarpTile::at(number<0>{});
     static constexpr index_t kNPerWarp = WarpTile::at(number<1>{});
 
-    static constexpr index_t kMThreadPerWarp = kMPerWarp / kMPerThread;
-    static constexpr index_t kNThreadPerWarp = kNPerWarp / kNPerThread;
-
     static constexpr index_t kMPerBlock = BlockTile::at(number<0>{});
     static constexpr index_t kNPerBlock = BlockTile::at(number<1>{});
+
+    static constexpr index_t kMThreadPerWarp = kMPerWarp / kMPerThread;
+    static constexpr index_t kNThreadPerWarp = kNPerWarp / kNPerThread;
 
     static constexpr index_t kMWarpPerBlock = kMPerBlock / kMPerWarp;
     static constexpr index_t kNWarpPerBlock = kNPerBlock / kNPerWarp;
