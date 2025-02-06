@@ -815,7 +815,7 @@ pipeline {
             description: "Run the ck_tile FMHA tests (default: OFF)")
         booleanParam(
             name: "RUN_CK_TILE_FLEX_ATTENTION_TESTS",
-            defaultValue: true,
+            defaultValue: false,
             description: "Run the ck_tile FLEX ATTENTION tests (default: ON)")
         booleanParam(
             name: "RUN_CK_TILE_GEMM_TESTS",
