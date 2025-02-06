@@ -683,7 +683,7 @@ def process_results(Map conf=[:]){
                             unstash "perf_tile_flex_attn_log_gfx942"
                         }
                         catch(Exception err){
-                            echo "could not locate the FMHA performance logs: ${err.getMessage()}."
+                            echo "could not locate the Flex Attention performance logs: ${err.getMessage()}."
                         }
                     }
                     if (params.RUN_CK_TILE_GEMM_TESTS){
