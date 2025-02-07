@@ -85,6 +85,10 @@ auto create_args(int argc, char* argv[])
                 "P and O.\n"
                 "calculate scale_s, scale_p, scale_o according to range_q, range_k, range_v, "
                 "range_p, range_o")
+        .insert("rdquant",
+                "0",
+                "if using rowwise dynamic quantization fusion or not.\n"
+                "0: no dynamic quant. 1: apply rowwise dynamic quantization with respect Q, K and V.\n")
         .insert("iperm",
                 "1",
                 "permute input\n"
@@ -95,7 +99,7 @@ auto create_args(int argc, char* argv[])
                 "n or 0, no bias\n"
                 "e(lementwise) or 1, elementwise bias with 1*1*s*s. e:1, 1*h*s*s. e:2, b*h*s*s\n"
                 "a(libi) or 2, alibi with 1*h. a:1, b*h")
-        .insert("prec", "fp16", "data type. fp16/bf16/fp8/bf8")
+        .insert("prec", "fp16", "data type. fp16/bf16/fp8/bf8/fp8bf16")
         .insert("mask",
                 "0",
                 "0: no mask, 1: top-left(same as 't'), 2:bottom-right(same as 'b')\n"
@@ -174,6 +178,14 @@ auto get_elimit<FmhaFwdFp8>(std::string init_method)
         double atol                          = 0.0625;
         return ck_tile::make_tuple(max_rounding_point_distance, atol);
     }
+}
+
+template <>
+auto get_elimit<FmhaFwdFp8Bf16>(std::string init_method)
+{
+    double rtol = 1e-2;
+    double atol = 1e-2;
+    return ck_tile::make_tuple(rtol, atol);
 }
 
 int num_splits_heuristic(int batch_nhead_mblocks, int num_SMs, int num_n_blocks, int max_splits)
@@ -1579,6 +1591,10 @@ int main(int argc, char* argv[])
     else if(data_type == "fp8")
     {
         return run<FmhaFwdFp8>(arg_parser) ? 0 : -2;
+    }
+    else if(data_type == "fp8bf16")
+    {
+        return run<FmhaFwdFp8Bf16>(arg_parser) ? 0 : -2;
     }
 
     return -3;

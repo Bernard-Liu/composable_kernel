@@ -107,6 +107,22 @@ struct FmhaFwdTypeConfig<FmhaFwdBf8>
     using ODataType             = ck_tile::bf8_t;
 };
 
+template <>
+struct FmhaFwdTypeConfig<FmhaFwdFp8Bf16>
+{
+    using QDataType             = ck_tile::fp8_t;
+    using KDataType             = ck_tile::fp8_t;
+    using VDataType             = ck_tile::fp8_t;
+    using BiasDataType          = float;
+    using RandValOutputDataType = uint8_t;
+    using LSEDataType           = float; // data type for lse(logsumexp L_j = max_j + log(l_j))
+    using SaccDataType          = float; // data type for first gemm accumulation
+    using SMPLComputeDataType   = float; // data type for reduction, softmax
+    using PDataType             = ck_tile::fp8_t; // data type for A matrix of second gemm
+    using OaccDataType          = float;          // data type for second gemm accumulation
+    using ODataType             = ck_tile::bf16_t;
+};
+
 struct FmhaMasks
 {
     using NoMask      = ck_tile::GenericAttentionMask<false>;
@@ -635,6 +651,7 @@ template <ck_tile::index_t HDim_,
           bool kStoreLse_,
           bool kHasDropout_,
           bool kDoFp8StaticQuant_,
+          bool kDoFp8RowwiseDynamicQuant_,
           bool kPadS_,
           bool kPadSK_,
           bool kPadD_,
@@ -657,6 +674,7 @@ struct fmha_fwd_traits_
     static constexpr bool kStoreLse                  = kStoreLse_;
     static constexpr bool kHasDropout                = kHasDropout_;
     static constexpr bool kDoFp8StaticQuant          = kDoFp8StaticQuant_;
+    static constexpr bool kDoFp8RowwiseDynamicQuant  = kDoFp8RowwiseDynamicQuant_;
     static constexpr bool kPadS                      = kPadS_;
     static constexpr bool kPadSK                     = kPadSK_;
     static constexpr bool kPadD                      = kPadD_;
@@ -789,6 +807,7 @@ struct fmha_fwd_traits
     bool has_lse;
     bool has_dropout;
     bool do_fp8_static_quant;
+    bool do_fp8_rowwise_dynamic_quant;
     // TODO: padding check is inside this api
 };
 float fmha_fwd(fmha_fwd_traits, fmha_fwd_args, const ck_tile::stream_config&);
@@ -804,6 +823,7 @@ struct fmha_fwd_splitkv_traits
     bias_enum bias_type; // 0:no bias, 1:elementwise bias, 2:alibi. sync with BlockAttentionBiasEnum
     bool has_lse;
     bool do_fp8_static_quant;
+    bool do_fp8_rowwise_dynamic_quant;
     // TODO: padding check is inside this api
 };
 float fmha_fwd_splitkv(fmha_fwd_splitkv_traits,
