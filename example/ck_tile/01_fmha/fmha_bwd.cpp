@@ -55,7 +55,7 @@ auto create_args(int argc, char* argv[])
         .insert("iperm",
                 "1",
                 "permute input\n"
-                "if true, will be b*h*s*d, else b*s*h*d")
+                "if true, will be b*h*s*d, else s*b*h*d")
         .insert("operm", "1", "permute output")
         .insert("bias",
                 "n",
@@ -150,7 +150,8 @@ bool run(const ck_tile::ArgParser& arg_parser)
         hdim_v = hdim_q;
 
     bool i_perm = arg_parser.get_bool("iperm"); // if true, will be batch * nhead * seqlen * hdim
-    bool o_perm = arg_parser.get_bool("operm"); // if false, will be batch * seqlen * nhead * hdim
+    // bool o_perm = arg_parser.get_bool("operm"); // if false, will be batch * seqlen * nhead * hdim
+    bool o_perm = arg_parser.get_bool("operm"); // if false, will be seqlen * batch * nhead * hdim
 
     float scale = arg_parser.get_float("scale");
     if(scale == .0f)
@@ -274,7 +275,8 @@ bool run(const ck_tile::ArgParser& arg_parser)
         if(permute)
             return std::array<ck_tile::index_t, 4>{b, h, s, d};
         else
-            return std::array<ck_tile::index_t, 4>{b, s, h, d};
+            // return std::array<ck_tile::index_t, 4>{b, s, h, d};
+            return std::array<ck_tile::index_t, 4>{s, b, h, d};
     };
 
     // host memory for storing all the tensor elements
@@ -326,7 +328,8 @@ bool run(const ck_tile::ArgParser& arg_parser)
     ck_tile::HostTensor<AccDataType> dq_acc_host(
         i_perm
             ? std::array<ck_tile::index_t, 5>{nsplits, shape_batch, nhead, shape_seqlen_q, hdim_q}
-            : std::array<ck_tile::index_t, 5>{nsplits, shape_batch, shape_seqlen_q, nhead, hdim_q});
+            // : std::array<ck_tile::index_t, 5>{nsplits, shape_batch, shape_seqlen_q, nhead, hdim_q});
+            : std::array<ck_tile::index_t, 5>{nsplits, shape_seqlen_q, shape_batch, nhead, hdim_q});
 
     if(init_method == 0)
     {
@@ -405,7 +408,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
     // clang-format off
     auto layout_str = [&](bool permute){
         if (permute) return std::string("bhsd");
-        else return std::string("bshd");
+        else return std::string("sbhd");
     };
     auto io_layout = [&](bool iperm_, bool operm_) {
         if (iperm_ == operm_) return layout_str(iperm_);
@@ -444,17 +447,17 @@ bool run(const ck_tile::ArgParser& arg_parser)
         /// NOTE: we broadcast bias from [1, 1, seqlen_q, seqlen_k] to [batch, nhead, seqlen_q,
         ///       seqlen_k] in this example, hence both the 'batch_stride_bias' &
         ///       'nhead_stride_bias' are 0.
-        // setup stride_* arguments
-        const ck_tile::index_t stride_q       = (i_perm ? hdim_q : nhead * hdim_q);
-        const ck_tile::index_t stride_k       = (i_perm ? hdim_q : nhead_k * hdim_q);
-        const ck_tile::index_t stride_v       = (i_perm ? hdim_v : nhead_k * hdim_v);
+        // setup sequence stride_* arguments
+        const ck_tile::index_t stride_q       = (i_perm ? hdim_q : shape_batch* nhead * hdim_q);
+        const ck_tile::index_t stride_k       = (i_perm ? hdim_q : shape_batch* nhead_k * hdim_q);
+        const ck_tile::index_t stride_v       = (i_perm ? hdim_v : shape_batch* nhead_k * hdim_v);
         const ck_tile::index_t stride_bias    = (max_seqlen_k);
-        const ck_tile::index_t stride_o       = (o_perm ? hdim_v : nhead * hdim_v);
+        const ck_tile::index_t stride_o       = (o_perm ? hdim_v : shape_batch* nhead * hdim_v);
         const ck_tile::index_t stride_randval = (max_seqlen_k);
-        const ck_tile::index_t stride_do      = (o_perm ? hdim_v : nhead * hdim_v);
-        const ck_tile::index_t stride_dk      = (i_perm ? hdim_q : nhead * hdim_q);
-        const ck_tile::index_t stride_dv      = (i_perm ? hdim_v : nhead * hdim_v);
-        const ck_tile::index_t stride_dbias   = (i_perm ? max_seqlen_k : nhead * max_seqlen_k);
+        const ck_tile::index_t stride_do      = (o_perm ? hdim_v : shape_batch* nhead * hdim_v);
+        const ck_tile::index_t stride_dk      = (i_perm ? hdim_q : shape_batch* nhead * hdim_q);
+        const ck_tile::index_t stride_dv      = (i_perm ? hdim_v : shape_batch* nhead * hdim_v);
+        const ck_tile::index_t stride_dbias   = (i_perm ? max_seqlen_k : shape_batch* nhead * max_seqlen_k);
         // setup nhead_stride_* arguments
         const ck_tile::index_t nhead_stride_q       = (i_perm ? shape_seqlen_q * hdim_q : hdim_q);
         const ck_tile::index_t nhead_stride_k       = (i_perm ? shape_seqlen_k * hdim_q : hdim_q);
@@ -467,19 +470,19 @@ bool run(const ck_tile::ArgParser& arg_parser)
         const ck_tile::index_t nhead_stride_dbias =
             (i_perm ? shape_seqlen_q * max_seqlen_k : max_seqlen_k);
         // setup batch_stride_* arguments
-        const ck_tile::index_t batch_stride_q       = (nhead * shape_seqlen_q * hdim_q);
-        const ck_tile::index_t batch_stride_k       = (nhead_k * shape_seqlen_k * hdim_q);
-        const ck_tile::index_t batch_stride_v       = (nhead_k * shape_seqlen_k * hdim_v);
+        const ck_tile::index_t batch_stride_q       = (nhead  * hdim_q);
+        const ck_tile::index_t batch_stride_k       = (nhead_k  * hdim_q);
+        const ck_tile::index_t batch_stride_v       = (nhead_k  * hdim_v);
         const ck_tile::index_t batch_stride_bias    = 0;
-        const ck_tile::index_t batch_stride_o       = (nhead * shape_seqlen_q * hdim_v);
-        const ck_tile::index_t batch_stride_randval = (nhead * shape_seqlen_q * max_seqlen_k);
-        const ck_tile::index_t batch_stride_do      = (nhead * shape_seqlen_q * hdim_v);
-        const ck_tile::index_t batch_stride_lsed    = (nhead * shape_seqlen_q);
-        const ck_tile::index_t batch_stride_dk      = (nhead * shape_seqlen_k * hdim_q);
-        const ck_tile::index_t batch_stride_dv      = (nhead * shape_seqlen_k * hdim_v);
-        const ck_tile::index_t batch_stride_dbias   = (nhead * shape_seqlen_q * max_seqlen_k);
+        const ck_tile::index_t batch_stride_o       = (nhead  * hdim_v);
+        const ck_tile::index_t batch_stride_randval = (nhead  * max_seqlen_k);
+        const ck_tile::index_t batch_stride_do      = (nhead  * hdim_v);
+        const ck_tile::index_t batch_stride_lsed    = (nhead );
+        const ck_tile::index_t batch_stride_dk      = (nhead  * hdim_q);
+        const ck_tile::index_t batch_stride_dv      = (nhead  * hdim_v);
+        const ck_tile::index_t batch_stride_dbias   = (nhead  * max_seqlen_k);
         const ck_tile::index_t split_stride_dq_acc =
-            (shape_batch * nhead * shape_seqlen_q * hdim_q);
+            (shape_batch * nhead  * hdim_q);
 
         const auto drop_seed_offset = [&]() -> decltype(fmha_bwd_args::drop_seed_offset) {
             if(drop_prefs)
@@ -633,15 +636,15 @@ bool run(const ck_tile::ArgParser& arg_parser)
         // clang-format off
         // permute
         if(i_perm) q_host_ref.ForEach([&](auto& self, auto i) { self(i) = q_host(b, i[0], i[1] + query_offset, i[2]); });
-        else       q_host_ref.ForEach([&](auto& self, auto i) { self(i) = q_host(b, i[1] + query_offset, i[0], i[2]); });
+        else       q_host_ref.ForEach([&](auto& self, auto i) { self(i) = q_host(i[1] + query_offset, b, i[0], i[2]); });
 
         if(i_perm) k_host_ref.ForEach([&](auto& self, auto i) { self(i) = k_host(b, i[0] / nr, i[1] + key_offset, i[2]); });
-        else       k_host_ref.ForEach([&](auto& self, auto i) { self(i) = k_host(b, i[1] + key_offset, i[0] / nr, i[2]); });
+        else       k_host_ref.ForEach([&](auto& self, auto i) { self(i) = k_host(i[1] + key_offset, b, i[0] / nr, i[2]); });
 
         // v_host_ref: [nhead, hdim, seq], v_host: [b, h_k, s, d]
         if(i_perm) v_host_ref.ForEach([&](auto& self, auto i) { self(i) = v_host(b, i[0] / nr, i[2] + key_offset, i[1]); });
         // v_host_ref: [nhead, hdim, seq], v_host: [b, s, h_k, d]
-        else       v_host_ref.ForEach([&](auto& self, auto i) { self(i) = v_host(b, i[2] + key_offset, i[0] / nr, i[1]); });
+        else       v_host_ref.ForEach([&](auto& self, auto i) { self(i) = v_host(i[2] + key_offset, b, i[0] / nr, i[1]); });
         // clang-format on
 
         // reference
@@ -662,7 +665,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             if(i_perm)
                 bias_host_ref.ForEach([&](auto& self, auto i) { self(i) = bias_host(0, 0, i[1] + query_offset, i[2]); });
             else
-                bias_host_ref.ForEach([&](auto& self, auto i) { self(i) = bias_host(0, i[1] + query_offset, 0, i[2]); });
+                bias_host_ref.ForEach([&](auto& self, auto i) { self(i) = bias_host(i[1] + query_offset, 0, 0, i[2]); });
             // clang-format on
 
             // broadcast from [1, real_seqlen_q, real_seqlen_k] to [nhead, real_seqlen_q,
@@ -781,7 +784,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
         // clang-format off
         // permute
         if(o_perm) o_host_ref.ForEach([&](auto& self, auto idx) { o_host(b, idx[0], idx[1] + query_offset, idx[2]) = self(idx); });
-        else       o_host_ref.ForEach([&](auto& self, auto idx) { o_host(b, idx[1] + query_offset, idx[0], idx[2]) = self(idx); });
+        else       o_host_ref.ForEach([&](auto& self, auto idx) { o_host(idx[1] + query_offset, b, idx[0], idx[2]) = self(idx); });
 
         lse_host_ref.ForEach([&](auto& self, auto idx) { lse_host(b, idx[0], idx[1] + query_offset) = self(idx); });
         // clang-format on
@@ -838,7 +841,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
         // clang-format off
         if(o_perm) do_host_ref.ForEach([&](auto& self, auto i) { self(i) = do_host(b, i[0], i[1] + query_offset, i[2]); });
-        else       do_host_ref.ForEach([&](auto& self, auto i) { self(i) = do_host(b, i[1] + query_offset, i[0], i[2]); });
+        else       do_host_ref.ForEach([&](auto& self, auto i) { self(i) = do_host(i[1] + query_offset, b, i[0], i[2]); });
         // clang-format on
 
         // dP = dO@V x Z w/  dropout
@@ -918,18 +921,18 @@ bool run(const ck_tile::ArgParser& arg_parser)
         // clang-format off
         // permute
         if(i_perm) dq_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dq_host(b, idx[0], idx[1] + query_offset, idx[2]); });
-        else       dq_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dq_host(b, idx[1] + query_offset, idx[0], idx[2]); });
+        else       dq_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dq_host(idx[1] + query_offset, b, idx[0], idx[2]); });
 
         if(i_perm) dk_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dk_host(b, idx[0], idx[1] + key_offset, idx[2]); });
-        else       dk_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dk_host(b, idx[1] + key_offset, idx[0], idx[2]); });
+        else       dk_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dk_host(idx[1] + key_offset, b, idx[0], idx[2]); });
 
         if(i_perm) dv_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dv_host(b, idx[0], idx[1] + key_offset, idx[2]); });
-        else       dv_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dv_host(b, idx[1] + key_offset, idx[0], idx[2]); });
+        else       dv_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dv_host(idx[1] + key_offset, b, idx[0], idx[2]); });
 
         if(use_dbias)
         {
             if(i_perm) dbias_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dbias_host(b, idx[0], idx[1] + query_offset, idx[2]); });
-            else       dbias_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dbias_host(b, idx[1] + query_offset, idx[0], idx[2]); });
+            else       dbias_host_result.ForEach([&](auto& self, auto idx) {self(idx) = dbias_host(idx[1] + query_offset, b, idx[0], idx[2]); });
         }
         // clang-format on
 
