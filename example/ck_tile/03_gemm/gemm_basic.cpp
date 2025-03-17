@@ -18,7 +18,8 @@ template <typename ADataType,
           typename CDataType,
           typename ALayout,
           typename BLayout,
-          typename CLayout>
+          typename CLayout,
+          ck_tile::memory_operation_enum MemoryOperation>
 float gemm_calc(const ck_tile::GemmHostArgs& args, const ck_tile::stream_config& s)
 {
     // The kPadM, kPadN, kPadK & kBlockPerCu should also come from the Codegen part.
@@ -67,7 +68,8 @@ float gemm_calc(const ck_tile::GemmHostArgs& args, const ck_tile::stream_config&
                                          M_Warp_Tile,
                                          N_Warp_Tile,
                                          K_Warp_Tile,
-                                         CodegenPipelineProblem::TransposeC>>;
+                                         CodegenPipelineProblem::TransposeC,
+                                         MemoryOperation>>;
     // ToDo: Will add the codegen part to test different pipeline policies in GEMM.
     // Now we only use the BlockGemmASmemBSmemCRegV1DefaultPolicy.
     using Kernel = ck_tile::GemmKernel<TilePartitioner, CodegenGemmPipeline, GemmEpilogue>;

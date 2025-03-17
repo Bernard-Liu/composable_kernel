@@ -175,9 +175,32 @@ float invoke_gemm(ck_tile::DeviceMem& a_m_k_dev_buf,
     args.stride_B = stride_B;
     args.stride_C = stride_C;
 
-    float ave_time =
-        gemm_calc<ADataType, BDataType, AccDataType, CDataType, ALayout, BLayout, CLayout>(
+    float ave_time;
+
+    if(kbatch == 1)
+    {
+        ave_time = gemm_calc<ADataType,
+                             BDataType,
+                             AccDataType,
+                             CDataType,
+                             ALayout,
+                             BLayout,
+                             CLayout,
+                             ck_tile::memory_operation_enum::set>(
             args, ck_tile::stream_config{nullptr, true, 1, n_warmup, n_repeat});
+    }
+    else
+    {
+        ave_time = gemm_calc<ADataType,
+                             BDataType,
+                             AccDataType,
+                             CDataType,
+                             ALayout,
+                             BLayout,
+                             CLayout,
+                             ck_tile::memory_operation_enum::atomic_add>(
+            args, ck_tile::stream_config{nullptr, true, 1, n_warmup, n_repeat});
+    }
 
     std::size_t flop = std::size_t(2) * M * N * K;
     std::size_t num_byte =
