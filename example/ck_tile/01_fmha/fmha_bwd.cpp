@@ -475,9 +475,9 @@ bool run(const ck_tile::ArgParser& arg_parser)
         const ck_tile::index_t batch_stride_v       = (nhead_k  * hdim_v);
         const ck_tile::index_t batch_stride_bias    = 0;
         const ck_tile::index_t batch_stride_o       = (nhead  * hdim_v);
-        const ck_tile::index_t batch_stride_randval = (nhead  * max_seqlen_k);
+        const ck_tile::index_t batch_stride_randval = (nhead * shape_seqlen_q * max_seqlen_k);
         const ck_tile::index_t batch_stride_do      = (nhead  * hdim_v);
-        const ck_tile::index_t batch_stride_lsed    = (nhead );
+        const ck_tile::index_t batch_stride_lsed    = (nhead * shape_seqlen_q);
         const ck_tile::index_t batch_stride_dk      = (nhead  * hdim_q);
         const ck_tile::index_t batch_stride_dv      = (nhead  * hdim_v);
         const ck_tile::index_t batch_stride_dbias   = (nhead  * max_seqlen_k);
