@@ -191,102 +191,60 @@ struct BlockwiseGemmXdlops_pipeline_blockscale_bpreshuffle_v1<BlockGemmPipelineS
         return num_loop % 2 == 0 ? TailNumber::Even : TailNumber::Odd;
     }
 
-    __device__ static constexpr auto HotLoopScheduler()
+    template <typename scaleStage, typename mStage, typename nStage>
+    __device__ static constexpr auto
+    HotLoopScheduler(scaleStage scale_stage, mStage m_stage, nStage n_stage)
     {
         constexpr auto num_ds_read_inst_a     = HotLoopInstList::A_LDS_Read_Inst_Num;
         constexpr auto num_buffer_load_inst_a = HotLoopInstList::A_Buffer_Load_Inst_Num;
         constexpr auto num_buffer_load_inst_b = HotLoopInstList::B_Buffer_Load_Inst_Num * MWaves;
+        constexpr auto num_scale_stage        = KPerBlock / KScaleBlock;
+        constexpr auto num_buffer_load_inst_scale = MRepeat + NPerBlock / NScaleBlock;
 
-        constexpr auto num_pk_fma_per_kscaleblock = MPerXDL == 16 ? 2 : 8;
-        constexpr auto num_mfma_per_kscaleblock =
-            MPerXDL == 16 ? KScaleBlock / 32 : KScaleBlock / 16;
-#if 0
-        // B global
-        static_for<0, num_buffer_load_inst_b, 1>{}([&](auto i) {
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            /* Judging issue v_pk_fma */
-            if constexpr((i + 1) % num_mfma_per_kscaleblock == 0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-            __builtin_amdgcn_sched_group_barrier(0x020, 1, 0); // VMEM read
-        });
+        if constexpr(m_stage == 0 && n_stage == 0)
+        {
+            // B global
+            static_for<0, num_buffer_load_inst_b / num_scale_stage, 1>{}([&](auto i) {
+                ignore = i;
+                __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
+                __builtin_amdgcn_sched_group_barrier(0x020, 1, 0); // VMEM read
+            });
+            if constexpr(scale_stage == num_scale_stage - 1)
+                __builtin_amdgcn_sched_barrier(0);
+        }
 
-        // A global
-        static_for<0, num_buffer_load_inst_a, 1>{}([&](auto i) {
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            if constexpr((num_buffer_load_inst_b + 2 * i + 1) % num_mfma_per_kscaleblock == 0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-            __builtin_amdgcn_sched_group_barrier(0x200, 1, 0); // DS write
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            if constexpr((num_buffer_load_inst_b + 2 * i + 2) % num_mfma_per_kscaleblock == 0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-            __builtin_amdgcn_sched_group_barrier(0x020, 1, 0); // VMEM read
-        });
+        if constexpr(m_stage == 0 && n_stage == 0 && scale_stage == num_scale_stage - 1)
+        {
+            // A global
+            static_for<0, num_buffer_load_inst_a, 1>{}([&](auto i) {
+                ignore = i;
+                __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
+                __builtin_amdgcn_sched_group_barrier(0x200, 1, 0); // DS write
+                __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
+                __builtin_amdgcn_sched_group_barrier(0x020, 1, 0); // VMEM read
+            });
 
-        // A local
-        static_for<0, num_ds_read_inst_a / 2, 1>{}([&](auto i) {
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            if constexpr((num_buffer_load_inst_b + 2 * num_buffer_load_inst_a + i + 1) %
-                             num_mfma_per_kscaleblock ==
-                         0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-            __builtin_amdgcn_sched_group_barrier(0x100, 2, 0); // DS read
-        });
-#elif 1 // v_mul occured too early causing vmcnt stall
-        // B global
-        static_for<0, num_buffer_load_inst_b, 1>{}([&](auto i) {
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            __builtin_amdgcn_sched_group_barrier(0x020, 1, 0); // VMEM read
-            /* Judging issue v_pk_fma */
-            if constexpr((i + 1) % num_mfma_per_kscaleblock == 0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-        });
+            if constexpr(MRepeat !=1 || NRepeat !=1)
+                __builtin_amdgcn_sched_barrier(0);
+        }
 
-        // A global
-        static_for<0, num_buffer_load_inst_a, 1>{}([&](auto i) {
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            __builtin_amdgcn_sched_group_barrier(0x200, 1, 0); // DS write
-            if constexpr((num_buffer_load_inst_b + 2 * i + 1) % num_mfma_per_kscaleblock == 0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            __builtin_amdgcn_sched_group_barrier(0x020, 1, 0); // VMEM read
-            if constexpr((num_buffer_load_inst_b + 2 * i + 2) % num_mfma_per_kscaleblock == 0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-        });
+        if constexpr(m_stage == MRepeat - 1 && n_stage == NRepeat - 1 && scale_stage == num_scale_stage - 1)
+        {
+            // A local
+            static_for<0, num_ds_read_inst_a / 2, 1>{}([&](auto i) {
+                ignore = i;
+                __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
+                __builtin_amdgcn_sched_group_barrier(0x100, 2, 0); // DS read
+            });
 
-        // A local
-        static_for<0, num_ds_read_inst_a / 2, 1>{}([&](auto i) {
-            __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
-            __builtin_amdgcn_sched_group_barrier(0x100, 2, 0); // DS read
-            if constexpr((num_buffer_load_inst_b + 2 * num_buffer_load_inst_a + i + 1) %
-                             num_mfma_per_kscaleblock ==
-                         0)
-            {
-                __builtin_amdgcn_sched_group_barrier(
-                    0x800, num_pk_fma_per_kscaleblock, 0); // PK_FMA
-            }
-        });
-#endif
+            static_for<0, num_buffer_load_inst_scale, 1>{}([&](auto i) {
+                ignore = i;
+                __builtin_amdgcn_sched_group_barrier(0x008, 1, 0); // MFMA
+                __builtin_amdgcn_sched_group_barrier(0x020, 1, 0); // VMEM read
+            });
+
+            __builtin_amdgcn_sched_barrier(0);
+        }
     }
 
     template <bool HasMainLoop,
@@ -505,19 +463,9 @@ struct BlockwiseGemmXdlops_pipeline_blockscale_bpreshuffle_v1<BlockGemmPipelineS
                                          b_thread_bufs(local_read_buf));
                     b_blockwise_copy.MoveSrcSliceWindow(b_grid_desc, b_block_copy_step);
 
-                    block_sync_lds();
-                    a_blockwise_copy.RunWrite(a_block_desc, a_block_buf, mfma_reg_buf);
-
-                    a_blockwise_copy.RunRead(a_grid_desc, a_grid_buf, local_read_buf);
-                    a_blockwise_copy.MoveSrcSliceWindow(a_grid_desc, a_block_copy_step);
-
                     static_for<0, MRepeat, 1>{}([&](auto m0) {
                         static_for<0, NRepeat, 1>{}([&](auto n0) {
                             static_for<0, num_scale_k_block, 1>{}([&](auto kscale0) {
-                                static_for<0, xdlops_gemm.GetRegSizePerXdlops(), 1>{}([&](auto t) {
-                                    c_thread_buf_per_scale.GetVectorTypeReference(Number<0>{})
-                                        .template AsType<AccDataType>()(Number<t>{}) = 0;
-                                });
                                 vector_type<AccDataType, 2> c_scale_thread_vec;
                                 constexpr index_t cscale_offset =
                                     CScaleThreadDesc{}.CalculateOffset(
@@ -527,6 +475,11 @@ struct BlockwiseGemmXdlops_pipeline_blockscale_bpreshuffle_v1<BlockGemmPipelineS
                                     c_scale_thread_buf[Number<cscale_offset>{}];
                                 c_scale_thread_vec.template AsType<AccDataType>()(Number<1>{}) =
                                     c_scale_thread_buf[Number<cscale_offset>{}];
+
+                                static_for<0, xdlops_gemm.GetRegSizePerXdlops(), 1>{}([&](auto t) {
+                                    c_thread_buf_per_scale.GetVectorTypeReference(Number<0>{})
+                                        .template AsType<AccDataType>()(Number<t>{}) = 0;
+                                });
 
                                 static_for<0, KRepeat / num_scale_k_block, 1>{}([&](auto k0) {
                                     vector_type<ComputeDataType, KPack> a_thread_vec;
@@ -580,71 +533,89 @@ struct BlockwiseGemmXdlops_pipeline_blockscale_bpreshuffle_v1<BlockGemmPipelineS
                                                     .GetVectorTypeReference(Number<c_offset>{})
                                                     .template AsType<pk_fma_type>()[t]);
                                     });
+                                if constexpr(kscale0 == num_scale_k_block - 1 &&
+                                             m0 == MRepeat - 1 && n0 == NRepeat - 1)
+                                {
+                                    block_sync_lds();
+                                    a_blockwise_copy.RunWrite(
+                                        a_block_desc, a_block_buf, mfma_reg_buf);
+
+                                    a_blockwise_copy.RunRead(
+                                        a_grid_desc, a_grid_buf, local_read_buf);
+                                    a_blockwise_copy.MoveSrcSliceWindow(a_grid_desc,
+                                                                        a_block_copy_step);
+
+                                    block_sync_lds();
+
+                                    static_for<0, MRepeat, 1>{}([&](auto im) {
+                                        static_for<0, KRepeat, 1>{}([&](auto ik) {
+                                            a_thread_copy_.Run(a_block_desc_m0_m1_m2_k0_k1_k2,
+                                                               make_tuple(im, I0, I0, ik, I0, I0),
+                                                               a_block_buf,
+                                                               a_thread_desc_,
+                                                               make_tuple(im, I0, I0, ik, I0, I0),
+                                                               a_thread_buf);
+                                        });
+                                    });
+
+                                    static_for<0, MRepeat, 1>{}([&](auto im) {
+                                        static_for<0, num_scale_n_block, 1>{}([&](auto in) {
+                                            static_for<0, num_scale_k_block, 1>{}([&](auto ik) {
+                                                constexpr index_t cscale_offset_set =
+                                                    CScaleThreadDesc{}.CalculateOffset(
+                                                        make_tuple(ik, im, in));
+                                                constexpr index_t a_offset =
+                                                    AScaleThreadDesc{}.CalculateOffset(
+                                                        make_tuple(im, ik));
+                                                constexpr index_t b_offset =
+                                                    BScaleThreadDesc{}.CalculateOffset(
+                                                        make_tuple(in, ik));
+
+                                                c_scale_thread_buf(Number<cscale_offset_set>{}) =
+                                                    a_scale_thread_buf[Number<a_offset>{}] *
+                                                    b_scale_thread_buf[Number<b_offset>{}];
+                                            });
+                                        });
+                                    });
+
+                                    static_for<0, MRepeat, 1>{}([&](auto im) {
+                                        a_scale_thread_copy.Run(a_scale_grid_desc,
+                                                                a_scale_grid_buf,
+                                                                a_scale_thread_desc,
+                                                                make_tuple(im, I0),
+                                                                a_scale_thread_buf);
+                                        a_scale_thread_copy.MoveSrcSliceWindow(
+                                            a_scale_grid_desc,
+                                            a_scale_thread_copy_step.At(Number<0>{}));
+                                    });
+
+                                    if constexpr(NumKBlockPerScale == 1)
+                                    {
+                                        a_scale_thread_copy.MoveSrcSliceWindow(
+                                            a_scale_grid_desc,
+                                            a_scale_thread_copy_step.At(Number<2>{}));
+                                    }
+                                    else
+                                    {
+                                        a_scale_thread_copy.MoveSrcSliceWindow(
+                                            a_scale_grid_desc,
+                                            a_scale_thread_copy_step.At(Number<1>{}));
+                                    }
+
+                                    b_scale_thread_copy.Run(b_scale_grid_desc,
+                                                            b_scale_grid_buf,
+                                                            b_scale_thread_desc,
+                                                            make_tuple(I0, I0),
+                                                            b_scale_thread_buf);
+
+                                    b_scale_thread_copy.MoveSrcSliceWindow(
+                                        b_scale_grid_desc, b_scale_thread_copy_step);
+                                }
+
+                                HotLoopScheduler(kscale0, m0, n0);
                             });
                         });
                     });
-
-                    static_for<0, MRepeat, 1>{}([&](auto m0) {
-                        static_for<0, num_scale_n_block, 1>{}([&](auto n0) {
-                            static_for<0, num_scale_k_block, 1>{}([&](auto k0) {
-                                constexpr index_t c_offset =
-                                    CScaleThreadDesc{}.CalculateOffset(make_tuple(k0, m0, n0));
-                                constexpr index_t a_offset =
-                                    AScaleThreadDesc{}.CalculateOffset(make_tuple(m0, k0));
-                                constexpr index_t b_offset =
-                                    BScaleThreadDesc{}.CalculateOffset(make_tuple(n0, k0));
-
-                                c_scale_thread_buf(Number<c_offset>{}) =
-                                    a_scale_thread_buf[Number<a_offset>{}] *
-                                    b_scale_thread_buf[Number<b_offset>{}];
-                            });
-                        });
-                    });
-
-                    block_sync_lds();
-
-                    static_for<0, MRepeat, 1>{}([&](auto m0) {
-                        static_for<0, KRepeat, 1>{}([&](auto k0) {
-                            a_thread_copy_.Run(a_block_desc_m0_m1_m2_k0_k1_k2,
-                                               make_tuple(m0, I0, I0, k0, I0, I0),
-                                               a_block_buf,
-                                               a_thread_desc_,
-                                               make_tuple(m0, I0, I0, k0, I0, I0),
-                                               a_thread_buf);
-                        });
-                    });
-
-                    static_for<0, MRepeat, 1>{}([&](auto m0) {
-                        a_scale_thread_copy.Run(a_scale_grid_desc,
-                                                a_scale_grid_buf,
-                                                a_scale_thread_desc,
-                                                make_tuple(m0, I0),
-                                                a_scale_thread_buf);
-                        a_scale_thread_copy.MoveSrcSliceWindow(
-                            a_scale_grid_desc, a_scale_thread_copy_step.At(Number<0>{}));
-                    });
-
-                    if constexpr(NumKBlockPerScale == 1)
-                    {
-                        a_scale_thread_copy.MoveSrcSliceWindow(
-                            a_scale_grid_desc, a_scale_thread_copy_step.At(Number<2>{}));
-                    }
-                    else
-                    {
-                        a_scale_thread_copy.MoveSrcSliceWindow(
-                            a_scale_grid_desc, a_scale_thread_copy_step.At(Number<1>{}));
-                    }
-
-                    b_scale_thread_copy.Run(b_scale_grid_desc,
-                                            b_scale_grid_buf,
-                                            b_scale_thread_desc,
-                                            make_tuple(I0, I0),
-                                            b_scale_thread_buf);
-
-                    b_scale_thread_copy.MoveSrcSliceWindow(b_scale_grid_desc,
-                                                           b_scale_thread_copy_step);
-                    HotLoopScheduler();
-                    __builtin_amdgcn_sched_barrier(0);
                 };
 
                 LoopFunc(I0, I1);
