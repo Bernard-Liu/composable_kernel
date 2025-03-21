@@ -234,14 +234,14 @@ float fmha_bwd_(const ck_tile::stream_config& s, fmha_bwd_args a)
                   << fmha_bwd_convert_dq_get_name_<convert_dq_trait_>() << std::flush;
     return ck_tile::launch_kernel(
         s,
-        [=](const ck_tile::stream_config& s_) {
-            fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);
-        },
+        // [=](const ck_tile::stream_config& s_) {
+            // fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);
+        // },
         [=](const ck_tile::stream_config& s_) {
             fmha_bwd_dq_dk_dv_oneshot_<dq_dk_dv_trait_>(s_, a);
-        },
-        [=](const ck_tile::stream_config& s_) {
-            fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);
+        // },
+        // [=](const ck_tile::stream_config& s_) {
+            // fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);
         });
 }
 
