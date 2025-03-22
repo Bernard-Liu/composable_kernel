@@ -102,6 +102,42 @@ inline auto create_args(int argc, char* argv[])
     return std::make_tuple(result, arg_parser);
 }
 
+
+template <typename Tensor,
+          typename BDataType>
+void permute_tensor_b(Tensor& tensor)
+{
+    const ck_tile::index_t K  = tensor.get_length(0);
+    const ck_tile::index_t N  = tensor.get_length(1);
+    const ck_tile::index_t K1 = 1;
+    
+    if constexpr(std::is_same_v<BDataType, ck_tile::half_t> or std::is_same_v<BDataType, ck_tile::bf16_t>)
+    {
+        K1 = 4;
+    }
+    if constexpr(std::is_same_v<BDataType, ck_tile::fp8_t> or std::is_same_v<BDataType, ck_tile::bf8_t>)
+    {
+        K1 = 4;
+    }
+    
+    const ck_tile::index_t K0 = K / K1;
+
+    Tensor tensor_copy = tensor;
+
+    // int K0, N, K1
+    for(int j = 0; j < K0; j++)
+    {
+        for(int i = 0; i < N; i++)
+        {
+            for(int jj = 0; jj < K1; jj++)
+            {
+                tensor(j * N * K1 + i * K1 + jj) = tensor_copy(i * K + (j * K1 + jj));
+            }
+        }
+    }
+}
+
+
 template <typename Tensor>
 void permute_vectors_i4x4_b(Tensor& tensor)
 {
