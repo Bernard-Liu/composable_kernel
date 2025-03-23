@@ -1,60 +1,63 @@
-
 {
-    "tile_m": {
-        "values": [256, 64]
+    "matrix_configuration": {
+      "layout_a": {
+        "values": ["r"]
+      },
+      "layout_b": {
+        "values": ["c"]
+      },
+      "layout_c": {
+        "values": ["r"] 
+      },
+      "datatype": {
+        "values": ["fp16"] 
+      }
     },
-    "tile_n": {
+    "implementation_traits": {
+      "tile_m": {
         "values": [256, 64]
-    },
-    "tile_k": {
+      },
+      "tile_n": {
+        "values": [256, 64]
+      },
+      "tile_k": {
         "values": [64, 64]
-    },
-    "warp_m": {
+      },
+      "warp_m": {
         "values": [2, 3]
-    },
-    "warp_n": {
+      },
+      "warp_n": {
         "values": [2, 2]
-    },
-    "warp_k": {
+      },
+      "warp_k": {
         "values": [1, 1]
-    },
-    "warp_tile_m": {
+      },
+      "warp_tile_m": {
         "values": [32, 32]
-    },
-    "warp_tile_n": {
+      },
+      "warp_tile_n": {
         "values": [32, 32]
-    },
-    "warp_tile_k": {
+      },
+      "warp_tile_k": {
         "values": [16, 16]
-    },
-    "layout_a": {
-        "values": ["r", "r"]
-    },
-    "layout_b": {
-        "values": ["c", "c"]
-    },
-    "layout_c": {
-        "values": ["r", "c"]
-    },
-    "kPadM": {
+      },
+      "kPadM": {
         "values": [false, false]
-    },
-    "kPadN": {
+      },
+      "kPadN": {
         "values": [false, false]
-    },
-    "kPadK": {
+      },
+      "kPadK": {
         "values": [false, false]
-    },
-    "datatype": {
-        "values": ["fp16", "int4"]
-    },
-    "pipeline": {
+      },
+      "pipeline": {
         "values": ["compv3", "mem"]
-    },
-    "scheduler": {
+      },
+      "scheduler": {
         "values": ["intrawave", "interwave"]
-    },
-    "epilogue": {
+      },
+      "epilogue": {
         "values": ["cshuffle", "default"]
+      }
     }
-}
+  }
