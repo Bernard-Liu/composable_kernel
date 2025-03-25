@@ -88,11 +88,12 @@ struct naive_attention_fwd_traits
 };
 
 // this is trait for kernel template
-template <naive_attention_variation_enum variation_, naive_attention_quant_algo quant_algo_>
+template <naive_attention_variation_enum variation_, naive_attention_quant_algo quant_algo_, bool is_mla_>
 struct naive_attention_fwd_kernel_traits
 {
     static constexpr naive_attention_variation_enum variation = variation_;
     static constexpr naive_attention_quant_algo quant_algo    = quant_algo_;
+    static constexpr bool is_mla = is_mla_;
 };
 
 // for simplicity, please do not use const-reference type for the template type
@@ -139,10 +140,15 @@ struct naive_attention_fwd_kernel
     template <typename T, naive_attention_layout_enum Layout>
     struct addresser
     {
-        int b, s, h, d; // batch, seqlen, nhead, hdim
+        int b, s, h, d, stride; // batch, seqlen, nhead, hdim
         T* base_ptr;
         __device__ addresser(int b_, int s_, int h_, int d_, void* base_ptr_)
-            : b(b_), s(s_), h(h_), d(d_), base_ptr(reinterpret_cast<T*>(base_ptr_))
+            : b(b_), s(s_), h(h_), d(d_), stride(d_), base_ptr(reinterpret_cast<T*>(base_ptr_))
+        {
+        }
+
+        __device__ addresser(int b_, int s_, int h_, int d_, int stride_, void* base_ptr_)
+            : b(b_), s(s_), h(h_), d(d_), stride(stride_), base_ptr(reinterpret_cast<T*>(base_ptr_))
         {
         }
 
@@ -150,17 +156,17 @@ struct naive_attention_fwd_kernel
         __device__ T* get_base(int i_b, int i_h)
         {
             if constexpr(Layout == naive_attention_layout_enum::BSHD)
-                return base_ptr + i_b * s * h * d + i_h * d;
+                return base_ptr + i_b * s * h * stride + i_h * stride;
             else if constexpr(Layout == naive_attention_layout_enum::BHSD)
-                return base_ptr + i_b * s * h * d + i_h * s * d;
+                return base_ptr + i_b * s * h * stride + i_h * s * stride;
         }
 
         __device__ int get_offset(int i_s, int i_d)
         {
             if constexpr(Layout == naive_attention_layout_enum::BSHD)
-                return i_s * h * d + i_d;
+                return i_s * h * stride + i_d;
             else if constexpr(Layout == naive_attention_layout_enum::BHSD)
-                return i_s * d + i_d;
+                return i_s * stride + i_d;
         }
 
         // below set of API will directly use pointer inside this struct
@@ -172,7 +178,7 @@ struct naive_attention_fwd_kernel
     template <typename T, naive_attention_layout_enum Layout>
     struct page_addresser
     {
-        int s, h, d;                             // page_size, nhead, hdim
+        int s, h, d, stride;                             // page_size, nhead, hdim
         static constexpr int x = 16 / sizeof(T); // pack 4 dword
         T* base_ptr;
         int* page_table_ptr; // TODO: page table always int
@@ -182,6 +188,17 @@ struct naive_attention_fwd_kernel
             : s(s_),
               h(h_),
               d(d_),
+              stride(d_),
+              base_ptr(reinterpret_cast<T*>(base_ptr_)),
+              page_table_ptr(reinterpret_cast<int*>(pptr_))
+        {
+        }
+
+        __device__ page_addresser(int s_, int h_, int d_, int stride_, void* base_ptr_, void* pptr_)
+            : s(s_),
+              h(h_),
+              d(d_),
+              stride(stride_),
               base_ptr(reinterpret_cast<T*>(base_ptr_)),
               page_table_ptr(reinterpret_cast<int*>(pptr_))
         {
@@ -205,19 +222,19 @@ struct naive_attention_fwd_kernel
         {
             int page_offset  = get_phy_page_offset(i_s);
             int64_t page_idx = get_phy_page_idx(i_s);
-            int64_t base_    = page_idx * h * s * d;
+            int64_t base_    = page_idx * h * s * stride;
             if constexpr(Layout == naive_attention_layout_enum::PHSD)
-                return static_cast<int64_t>(i_h * s * d + page_offset * d + i_d) + base_;
+                return static_cast<int64_t>(i_h * s * stride + page_offset * stride + i_d) + base_;
             else if constexpr(Layout == naive_attention_layout_enum::PHDSX)
             {
                 int d_r = i_d / x;
                 int d_x = i_d % x;
-                return static_cast<int64_t>(i_h * d * s + d_r * s * x + page_offset * x + d_x) +
+                return static_cast<int64_t>(i_h * stride * s + d_r * s * x + page_offset * x + d_x) +
                        base_;
             }
             else if constexpr(Layout == naive_attention_layout_enum::PHDS)
             {
-                return static_cast<int64_t>(i_h * d * s + i_d * s + page_offset) + base_;
+                return static_cast<int64_t>(i_h * stride * s + i_d * s + page_offset) + base_;
             }
         }
 
@@ -230,10 +247,14 @@ struct naive_attention_fwd_kernel
     template <typename T, naive_attention_layout_enum Layout>
     struct kvscale_addresser
     {
-        int s, h, d; // seqlen(tokens), nhead, hdim
+        int s, h, d, stride; // seqlen(tokens), nhead, hdim
         T* base_ptr;
         __device__ kvscale_addresser(int s_, int h_, int d_, void* p_)
             : s(s_), h(h_), d(d_), base_ptr(reinterpret_cast<T*>(p_))
+        {
+        }
+        __device__ kvscale_addresser(int s_, int h_, int d_, int stride_, void* p_)
+            : s(s_), h(h_), d(d_), stride(stride_), base_ptr(reinterpret_cast<T*>(p_))
         {
         }
         __device__ int get_offset(int i_s, int i_h, int i_d)
@@ -248,7 +269,7 @@ struct naive_attention_fwd_kernel
             {
                 return 0;
             }
-            // [h, 2, d]
+            // [h, 2, stride]
             // return i_h * 2 * d + i_kv * d + i_d;
         }
         __device__ T load(int i_s, int i_h, int i_d) { return base_ptr[get_offset(i_s, i_h, i_d)]; }
@@ -365,12 +386,22 @@ struct naive_attention_fwd_kernel
             }
         }();
         auto v_addr = [&]() {
-            if constexpr(Traits::variation == naive_attention_variation_enum::FLASH_BATCHED)
+            if constexpr(Traits::variation == naive_attention_variation_enum::FLASH_BATCHED && !Traits::is_mla)
             {
                 return addresser<VType, VLayout>{
                     args.batch_kv, args.seqlen_kv, args.nhead_kv, args.hdim_v, args.v_ptr};
             }
-            else if constexpr(Traits::variation == naive_attention_variation_enum::DECODE_PAGED)
+            else if constexpr(Traits::variation == naive_attention_variation_enum::FLASH_BATCHED && Traits::is_mla)
+            {
+                return addresser<VType, VLayout>{
+                    args.batch_kv, args.seqlen_kv, args.nhead_kv, args.hdim_v, args.hdim, args.v_ptr};
+            }
+            else if constexpr(Traits::variation == naive_attention_variation_enum::DECODE_PAGED && !Traits::is_mla)
+            {
+                return page_addresser<VType, VLayout>{
+                    args.page_size, args.nhead_kv, args.hdim_v, args.hdim, args.v_ptr, page_table_ptr};
+            }
+            else if constexpr(Traits::variation == naive_attention_variation_enum::DECODE_PAGED && Traits::is_mla)
             {
                 return page_addresser<VType, VLayout>{
                     args.page_size, args.nhead_kv, args.hdim_v, args.v_ptr, page_table_ptr};
@@ -693,7 +724,8 @@ struct naive_attention_fwd_kernel
     {                                                                                                       \
         using ktraits_ = naive_attention_fwd_kernel_traits<                                                 \
             static_cast<naive_attention_variation_enum>(variation_),                                        \
-            static_cast<naive_attention_quant_algo>(quant_algo_)>;                                          \
+            static_cast<naive_attention_quant_algo>(quant_algo_),                                           \
+            is_mla_>;                                                                                       \
         using k_   = naive_attention_fwd_kernel<q_type_,                                                    \
                                               k_type_,                                                    \
                                               v_type_,                                                    \
@@ -750,7 +782,8 @@ struct naive_attention_fwd_kernel
         CK_TILE_DISPATCH_NAIVE_ATTEN_FWD_INTERNAL_();                                              \
     }
 
-//
+
+template <bool is_mla_ = false>
 CK_TILE_HOST float naive_attention_fwd(naive_attention_fwd_traits t,
                                        naive_attention_fwd_args a,
                                        ck_tile::stream_config s)
