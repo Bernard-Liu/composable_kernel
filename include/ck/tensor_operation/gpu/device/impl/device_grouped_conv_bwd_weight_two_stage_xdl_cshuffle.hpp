@@ -15,6 +15,7 @@
 #include "ck/tensor_operation/gpu/device/device_grouped_conv_bwd_weight.hpp"
 #include "ck/tensor_operation/operator_transform/transform_conv_bwd_weight_to_gemm.hpp"
 #include "ck/tensor_operation/operator_transform/transform_conv_bwd_weight_to_gemm_v2.hpp"
+#include "ck/tensor_operation/operator_transform/transform_conv_bwd_weight_to_gemm_v3.hpp"
 #include "ck/tensor_operation/operator_transform/transform_conv_ngchw_to_nhwgc.hpp"
 #include "ck/tensor_operation/gpu/device/convolution_backward_weight_specialization.hpp"
 #include "ck/tensor_operation/gpu/grid/gridwise_elementwise_2d.hpp"
@@ -238,14 +239,14 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
 
     static constexpr auto K1Number = Number<K1>{};
 
-    static constexpr auto conv_to_gemm_transformer_v2 =
+    using ConvTransformerV2 =
         TransformConvBwdWeightToGemmV2<NDimSpatial,
                                        MPerBlock,
                                        NPerBlock,
                                        K1Number,
                                        KPerBlock / K1Number,
                                        NumGroupsToMerge,
-                                       ConvBackwardWeightSpecialization>{};
+                                       ConvBackwardWeightSpecialization>;
 
     static constexpr auto conv_to_gemm_transformer_v1 =
         TransformConvBwdWeightToGemm<NDimSpatial,
@@ -254,6 +255,16 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
                                      K1Number,
                                      KPerBlock / K1Number,
                                      ConvBackwardWeightSpecialization>{};
+
+    using ConvTransformerV3 =
+        TransformConvBwdWeightToGemmV3<NDimSpatial,
+                                     MPerBlock,
+                                     NPerBlock,
+                                     K1Number,
+                                     KPerBlock / K1Number,
+                                     ConvBackwardWeightSpecialization>;
+
+    static constexpr auto conv_to_gemm_transformer = std::conditional_t<is_NGCHW_GKCYX_NGKHW<InLayout, WeiLayout, OutLayout>(), ConvTransformerV3, ConvTransformerV2>{};
 
     static constexpr index_t ClusterLengthMPerBlock =
         CBlockTransferClusterLengths_MBlock_MPerBlock_NBlock_NPerBlock::At(1);
@@ -278,7 +289,7 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
         const std::array<ck::index_t, NDimSpatial> lengths{1, 1};
         const std::array<ck::index_t, NDimSpatial + 3> strides{1, 1, 1, 1, 1};
         const std::array<ck::index_t, NDimSpatial> params{1, 1};
-        return conv_to_gemm_transformer_v2
+        return conv_to_gemm_transformer
             .template MakeABCGridDescriptor_A_K0_M_K1_B_K0_N_K1_C_M_N<2>(dim,
                                                                          dim,
                                                                          dim,
@@ -303,7 +314,7 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
         const std::array<ck::index_t, NDimSpatial> lengths{1, 1, 1};
         const std::array<ck::index_t, NDimSpatial + 3> strides{1, 1, 1, 1, 1, 1};
         const std::array<ck::index_t, NDimSpatial> params{1, 1, 1};
-        return conv_to_gemm_transformer_v2
+        return conv_to_gemm_transformer
             .template MakeABCGridDescriptor_A_K0_M_K1_B_K0_N_K1_C_M_N<3>(dim,
                                                                          dim,
                                                                          dim,
@@ -541,7 +552,7 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
                                                                  a_g_n_k_wos_strides);
 
             const auto descs =
-                conv_to_gemm_transformer_v2
+                conv_to_gemm_transformer
                     .template MakeABCGridDescriptor_A_K0_M_K1_B_K0_N_K1_C_M_N<NDimSpatial>(
                         Conv_N_,
                         Conv_K_,
@@ -1490,6 +1501,7 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
                 return false;
             }
         }
+        printf("PP\n");
 
         // Check this here, it allows to use other instances from factory even
         // if workspace is not allocated
@@ -1511,7 +1523,8 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
         if constexpr(NDimSpatial == 2)
         {
             if constexpr(!(is_NHWGC_GKYXC_NHWGK<InLayout, WeiLayout, OutLayout>() ||
-                           is_NGCHW_GKYXC_NGKHW<InLayout, WeiLayout, OutLayout>()))
+                           is_NGCHW_GKYXC_NGKHW<InLayout, WeiLayout, OutLayout>() ||
+                           is_NGCHW_GKCYX_NGKHW<InLayout, WeiLayout, OutLayout>()))
             {
                 return false;
             }
@@ -1519,7 +1532,8 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
         else if constexpr(NDimSpatial == 3)
         {
             if constexpr(!(is_NDHWGC_GKZYXC_NDHWGK<InLayout, WeiLayout, OutLayout>() ||
-                           is_NGCDHW_GKZYXC_NGKDHW<InLayout, WeiLayout, OutLayout>()))
+                           is_NGCDHW_GKZYXC_NGKDHW<InLayout, WeiLayout, OutLayout>() ||
+                           is_NGCDHW_GKCZYX_NGKDHW<InLayout, WeiLayout, OutLayout>()))
             {
                 return false;
             }
@@ -1528,6 +1542,7 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
         {
             return false;
         }
+        printf("PP\n");
 
         if constexpr(ConvBackwardWeightSpecialization ==
                      ConvolutionBackwardWeightSpecialization::Filter1x1Stride1Pad0)
@@ -1542,6 +1557,7 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
                 }
             }
         }
+        printf("PP\n");
 
         if constexpr(NumGroupsToMerge > 1)
         {
@@ -1559,40 +1575,71 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
                 return false;
             }
         }
+        printf("PP\n");
 
         const bool is_w_pad_zero = arg.input_left_pads_[NDimSpatial - 1] == 0 &&
                                    arg.input_right_pads_[NDimSpatial - 1] == 0;
         const auto X                 = arg.filter_spatial_lengths_[NDimSpatial - 1];
+        const auto Wo = arg.output_spatial_lengths_[NDimSpatial - 1];
         const bool XC_access_allowed = arg.Conv_G_ == 1 &&
                                        (arg.Conv_C_ * X) % BBlockTransferSrcScalarPerVector == 0 &&
                                        is_w_pad_zero;
+                                       printf("PP\n");
 
-        if(!((arg.Conv_C_ % BBlockTransferSrcScalarPerVector == 0 || XC_access_allowed) &&
-             arg.Conv_K_ % ABlockTransferSrcScalarPerVector == 0))
-        {
-            if(!(arg.Conv_K_ == 1 && arg.compute_ptr_offset_of_batch_.BatchStrideA_ == 1 &&
-                 NumGroupsToMerge > 1))
+        if constexpr(is_NGCHW_GKCYX_NGKHW<InLayout, WeiLayout, OutLayout>()) {
+            if(!(X % BBlockTransferSrcScalarPerVector == 0  &&
+                Wo % ABlockTransferSrcScalarPerVector == 0))
             {
                 return false;
             }
-            if(!(arg.Conv_C_ == 1 && arg.compute_ptr_offset_of_batch_.BatchStrideB_ == 1 &&
-                 NumGroupsToMerge > 1))
+        } else {
+            if(!((arg.Conv_C_ % BBlockTransferSrcScalarPerVector == 0 || XC_access_allowed) &&
+                 arg.Conv_K_ % ABlockTransferSrcScalarPerVector == 0))
+            {
+                if(!(arg.Conv_K_ == 1 && arg.compute_ptr_offset_of_batch_.BatchStrideA_ == 1 &&
+                     NumGroupsToMerge > 1))
+                {
+                    return false;
+                }
+                if(!(arg.Conv_C_ == 1 && arg.compute_ptr_offset_of_batch_.BatchStrideB_ == 1 &&
+                     NumGroupsToMerge > 1))
+                {
+                    return false;
+                }
+            }
+        }                                       
+        if constexpr(is_NGCHW_GKCYX_NGKHW<InLayout, WeiLayout, OutLayout>()) {
+            // vector load A/B matrix from global memory
+            if(!(ABlockTransferSrcVectorDim == 2 && BBlockTransferSrcVectorDim == 1))
+            {
+                return false;
+            }
+        } else {
+            // vector load A/B matrix from global memory
+            if(!(ABlockTransferSrcVectorDim == 1 && BBlockTransferSrcVectorDim == 1))
             {
                 return false;
             }
         }
 
-        // vector load A/B matrix from global memory
-        if(!(ABlockTransferSrcVectorDim == 1 && BBlockTransferSrcVectorDim == 1))
-        {
-            return false;
+        printf("PP\n");
+
+        if constexpr(is_NGCHW_GKCYX_NGKHW<InLayout, WeiLayout, OutLayout>()) {
+            // vector store C matrix into global memory
+            if(!(X % CBlockTransferScalarPerVector_NWaveNPerXdl == 0))
+            {
+                return false;
+            } 
+        }else {
+            // vector store C matrix into global memory
+            if(!(arg.Conv_C_ % CBlockTransferScalarPerVector_NWaveNPerXdl == 0))
+            {
+                return false;
+            }
         }
 
-        // vector store C matrix into global memory
-        if(!(arg.Conv_C_ % CBlockTransferScalarPerVector_NWaveNPerXdl == 0))
-        {
-            return false;
-        }
+        printf("PP\n");
+
 
         if constexpr(is_NGCHW_GKYXC_NGKHW<InLayout, WeiLayout, OutLayout>() ||
                      is_NGCDHW_GKZYXC_NGKDHW<InLayout, WeiLayout, OutLayout>())
@@ -1621,6 +1668,7 @@ struct DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle
             {
                 return false;
             }
+            printf("PP\n");
 
             constexpr long_index_t TwoGB = (long_index_t{1} << 31);
             if(!(arg.a_out_transpose_desc_.GetElementSpaceSize() * sizeof(ADataType) <= TwoGB &&

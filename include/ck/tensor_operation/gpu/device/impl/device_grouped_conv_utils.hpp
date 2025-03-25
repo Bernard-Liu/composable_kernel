@@ -35,6 +35,14 @@ constexpr bool is_NGCW_GKXC_NGKW()
            is_same_v<OutLayout, tensor_layout::convolution::NGKW>;
 }
 
+template <typename InLayout, typename WeiLayout, typename OutLayout>
+constexpr bool is_NGCW_GKCX_NGKW()
+{
+    return is_same_v<InLayout, tensor_layout::convolution::NGCW> &&
+           is_same_v<WeiLayout, tensor_layout::convolution::GKCX> &&
+           is_same_v<OutLayout, tensor_layout::convolution::NGKW>;
+}
+
 // 2d
 template <typename InLayout, typename WeiLayout, typename OutLayout>
 constexpr bool is_NHWGC_GKYXC_NHWGK()
@@ -59,6 +67,15 @@ constexpr bool is_NGCHW_GKYXC_NGKHW()
            is_same_v<WeiLayout, tensor_layout::convolution::GKYXC> &&
            is_same_v<OutLayout, tensor_layout::convolution::NGKHW>;
 }
+
+template <typename InLayout, typename WeiLayout, typename OutLayout>
+constexpr bool is_NGCHW_GKCYX_NGKHW()
+{
+    return is_same_v<InLayout, tensor_layout::convolution::NGCHW> &&
+           is_same_v<WeiLayout, tensor_layout::convolution::GKCYX> &&
+           is_same_v<OutLayout, tensor_layout::convolution::NGKHW>;
+}
+
 // 3d
 template <typename InLayout, typename WeiLayout, typename OutLayout>
 constexpr bool is_NDHWGC_GKZYXC_NDHWGK()
@@ -81,6 +98,14 @@ constexpr bool is_NGCDHW_GKZYXC_NGKDHW()
 {
     return is_same_v<InLayout, tensor_layout::convolution::NGCDHW> &&
            is_same_v<WeiLayout, tensor_layout::convolution::GKZYXC> &&
+           is_same_v<OutLayout, tensor_layout::convolution::NGKDHW>;
+}
+
+template <typename InLayout, typename WeiLayout, typename OutLayout>
+constexpr bool is_NGCDHW_GKCZYX_NGKDHW()
+{
+    return is_same_v<InLayout, tensor_layout::convolution::NGCDHW> &&
+           is_same_v<WeiLayout, tensor_layout::convolution::GKCZYX> &&
            is_same_v<OutLayout, tensor_layout::convolution::NGKDHW>;
 }
 

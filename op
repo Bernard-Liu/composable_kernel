@@ -1,0 +1,1 @@
+MIOpenDriver convfp16 -n 8 -c 448 -H 118 -W 182 -k 448 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -m conv -g 8 -F 4 -t 1 --iter 1

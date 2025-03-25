@@ -43,7 +43,20 @@ struct ThreadwiseTensorSliceTransfer_v6r1
     using SrcCoord = decltype(make_tensor_coordinate(SrcDesc{}, Index{}));
     using DstCoord = decltype(make_tensor_coordinate(DstDesc{}, Index{}));
 
-    static constexpr auto I0 = Number<0>{};
+    static constexpr auto I0  = Number<0>{};
+    static constexpr auto I1  = Number<1>{};
+    static constexpr auto I2  = Number<2>{};
+    static constexpr auto I3  = Number<3>{};
+    static constexpr auto I4  = Number<4>{};
+    static constexpr auto I5  = Number<5>{};
+    static constexpr auto I6  = Number<6>{};
+    static constexpr auto I7  = Number<7>{};
+    static constexpr auto I8  = Number<8>{};
+    static constexpr auto I10 = Number<10>{};
+    static constexpr auto I12 = Number<12>{};
+    static constexpr auto I13 = Number<13>{};
+    static constexpr auto I14 = Number<14>{};
+    static constexpr auto I16 = Number<16>{};
 
     __device__ constexpr ThreadwiseTensorSliceTransfer_v6r1(const SrcDesc& src_desc,
                                                             const Index& src_slice_origin,
@@ -87,40 +100,111 @@ struct ThreadwiseTensorSliceTransfer_v6r1
         constexpr auto num_access = SpaceFillingCurve::GetNumOfAccess();
 
         static_for<0, num_access, 1>{}([&](auto idx_1d) {
-            using src_vector_type = vector_type_maker_t<SrcData, ScalarPerVector>;
-            using src_vector_t    = typename src_vector_type::type;
-
-            using dst_vector_type = vector_type_maker_t<DstData, ScalarPerVector>;
-            using dst_vector_t    = typename dst_vector_type::type;
+            // using src_vector_type = vector_type_maker_t<SrcData, ScalarPerVector>;
+            // using src_vector_t    = typename src_vector_type::type;
 
             const bool is_src_valid =
                 coordinate_has_valid_offset_assuming_visible_index_is_valid(src_desc, src_coord_);
 
-            // copy data from src_buf into src_vector_container
-            auto src_vector_container = src_vector_type{
-                src_buf.template Get<src_vector_t>(src_coord_.GetOffset(), is_src_valid)};
+            using VectorSizeLookupTable    = Tuple<Sequence<>,
+                                                Sequence<I1>,
+                                                Sequence<I2>,
+                                                Sequence<I2, I1>,
+                                                Sequence<I4>,
+                                                Sequence<I4, I1>,
+                                                Sequence<I4, I2>,
+                                                Sequence<I4, I2, I1>,
+                                                Sequence<I8>,
+                                                Sequence<I8, I1>,
+                                                Sequence<I8, I2>,
+                                                Sequence<I8, I2, I1>,
+                                                Sequence<I8, I4>,
+                                                Sequence<I8, I4, I1>,
+                                                Sequence<I8, I4, I2>,
+                                                Sequence<I8, I4, I2, I1>,
+                                                Sequence<I16>>;
+            using VectorOffsetsLookupTable = Tuple<Sequence<>,
+                                                   Sequence<I0>,
+                                                   Sequence<I0>,
+                                                   Sequence<I0, I2>,
+                                                   Sequence<I0>,
+                                                   Sequence<I0, I4>,
+                                                   Sequence<I0, I4>,
+                                                   Sequence<I0, I4, I6>,
+                                                   Sequence<I0>,
+                                                   Sequence<I0, I8>,
+                                                   Sequence<I0, I8>,
+                                                   Sequence<I0, I8, I10>,
+                                                   Sequence<I0, I8>,
+                                                   Sequence<I0, I8, I12>,
+                                                   Sequence<I0, I8, I12>,
+                                                   Sequence<I0, I8, I12, I14>,
+                                                   Sequence<I0>>;
 
-            auto dst_vector_container = dst_vector_type{};
+            // copy data from src_buf into src_vector_container
+            // auto src_vector_container = src_vector_type{
+            //     src_buf.template Get<src_vector_t>(src_coord_.GetOffset(), is_src_valid)};
+
+            
+            static_for<0, tuple_element_t<ScalarPerVector, VectorSizeLookupTable>::Size(), 1>{}(
+                [&](auto v_idx) {
+                    constexpr auto VectorLoadSize =
+                    tuple_element_t<ScalarPerVector, VectorSizeLookupTable>::At(v_idx);
+                    constexpr auto LoadOffset =
+                    tuple_element_t<ScalarPerVector, VectorOffsetsLookupTable>::At(v_idx);
+                    
+                    using src_vector_container   = vector_type_maker_t<SrcData, VectorLoadSize>;
+                    using src_vector_container_t = typename src_vector_container::type;
+                    
+                    using dst_vector_type = vector_type_maker_t<DstData, VectorLoadSize>;
+                    using dst_vector_t    = typename dst_vector_type::type;
+                    
+                    auto dst_vector_container = dst_vector_type{};
+                    src_vector_container src_vector =
+                        src_vector_container{src_buf.template Get<src_vector_container_t>(
+                            src_coord_.GetOffset() + LoadOffset, is_src_valid)};
+
+                    static_for<0, VectorLoadSize, 1>{}([&](auto idx) {
+                        // apply the src elementwise op and convert to DstData under the hood if
+                        // needed
+
+
+                        // src_element_op_(
+                        //     op_r_v.template AsType<dst_elem_op_vec_t>()(idx + LoadOffset),
+                        //     src_vector.template AsType<src_elem_op_vec_t>()[idx]);
+
+
+
+                            DstData v;
+        
+                            // apply element-wise operation
+                            element_op_(v, src_vector.template AsType<SrcData>()[idx]);
+            
+                            // apply type convert
+                            dst_vector_container.template AsType<DstData>()(idx) = v;
+                    });
+
+
+                    const bool is_dst_valid =
+                        coordinate_has_valid_offset_assuming_visible_index_is_valid(dst_desc, dst_coord_);
+
+                    // copy data from dst_vector into dst_buf
+                    dst_buf.template Update<DstInMemOp, dst_vector_t>(
+                        dst_coord_.GetOffset() + LoadOffset,
+                        is_dst_valid,
+                        dst_vector_container.template AsType<dst_vector_t>()[I0]);
+                });
 
             // apply pointwise operation
-            static_for<0, ScalarPerVector, 1>{}([&](auto i) {
-                DstData v;
+            // static_for<0, ScalarPerVector, 1>{}([&](auto i) {
+            //     DstData v;
 
-                // apply element-wise operation
-                element_op_(v, src_vector_container.template AsType<SrcData>()[i]);
+            //     // apply element-wise operation
+            //     element_op_(v, src_vector_container.template AsType<SrcData>()[i]);
 
-                // apply type convert
-                dst_vector_container.template AsType<DstData>()(i) = v;
-            });
-
-            const bool is_dst_valid =
-                coordinate_has_valid_offset_assuming_visible_index_is_valid(dst_desc, dst_coord_);
-
-            // copy data from dst_vector into dst_buf
-            dst_buf.template Update<DstInMemOp, dst_vector_t>(
-                dst_coord_.GetOffset(),
-                is_dst_valid,
-                dst_vector_container.template AsType<dst_vector_t>()[I0]);
+            //     // apply type convert
+            //     dst_vector_container.template AsType<DstData>()(i) = v;
+            // });
 
             // move coordinate
             if constexpr(idx_1d.value != num_access - 1)

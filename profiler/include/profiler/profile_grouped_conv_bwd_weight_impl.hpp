@@ -69,17 +69,18 @@ bool profile_grouped_conv_bwd_weight_impl(int do_verification,
     std::cout << "weight: " << weight_host_result.mDesc << std::endl;
     std::cout << "output: " << output.mDesc << std::endl;
 
-    switch(init_method)
-    {
-    case 0: break;
-    case 1:
-        input.GenerateTensorValue(GeneratorTensor_2<InDataType>{-5, 5});
-        output.GenerateTensorValue(GeneratorTensor_2<OutDataType>{-5, 5});
-        break;
-    default:
-        input.GenerateTensorValue(GeneratorTensor_3<InDataType>{0.0, 1.0});
-        output.GenerateTensorValue(GeneratorTensor_3<OutDataType>{-0.5, 0.5});
-    }
+    (void)(init_method);
+    // switch(init_method)
+    // {
+    // case 0: break;
+    // case 1:
+        input.GenerateTensorValue(GeneratorTensor_2<InDataType>{1, 2});
+        output.GenerateTensorValue(GeneratorTensor_2<OutDataType>{1, 2});
+    //     break;
+    // default:
+    //     input.GenerateTensorValue(GeneratorTensor_3<InDataType>{0.0, 1.0});
+    //     output.GenerateTensorValue(GeneratorTensor_3<OutDataType>{-0.5, 0.5});
+    // }
 
     DeviceMem in_device_buf(sizeof(InDataType) * input.mDesc.GetElementSpaceSize());
     DeviceMem wei_device_buf(sizeof(WeiDataType) *

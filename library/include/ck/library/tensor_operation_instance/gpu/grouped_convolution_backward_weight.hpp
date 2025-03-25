@@ -478,6 +478,38 @@ struct DeviceOperationInstanceFactory<ck::tensor_operation::device::DeviceGroupe
                 }
 #endif
             }
+            if constexpr(is_same_v<InLayout, NGCHW> && is_same_v<WeiLayout, GKCYX> &&
+                is_same_v<OutLayout, NGKHW>)
+            {
+#ifdef CK_ENABLE_FP16
+                if constexpr(is_same_v<InDataType, half_t> && is_same_v<WeiDataType, half_t> &&
+                             is_same_v<OutDataType, half_t> && is_same_v<ComputeTypeA, half_t> &&
+                             is_same_v<ComputeTypeB, half_t>)
+                {
+                    add_device_grouped_conv2d_bwd_weight_two_stage_xdl_ngchw_gkcyx_ngkhw_f16_pipev1_instances(
+                        op_ptrs);
+                    add_device_grouped_conv2d_bwd_weight_two_stage_xdl_ngchw_gkcyx_ngkhw_f16_pipev2_instances(
+                        op_ptrs);
+                    add_device_grouped_conv2d_bwd_weight_two_stage_xdl_ngchw_gkcyx_ngkhw_f16_pipev5_instances(
+                        op_ptrs);
+                }
+#endif
+#ifdef CK_ENABLE_BF16
+                if constexpr(is_same_v<InDataType, ck::bhalf_t> &&
+                             is_same_v<WeiDataType, ck::bhalf_t> &&
+                             is_same_v<OutDataType, ck::bhalf_t> &&
+                             is_same_v<ComputeTypeA, ck::bhalf_t> &&
+                             is_same_v<ComputeTypeB, ck::bhalf_t>)
+                {
+                    add_device_grouped_conv2d_bwd_weight_two_stage_xdl_ngchw_gkcyx_ngkhw_bf16_pipev1_instances(
+                        op_ptrs);
+                    add_device_grouped_conv2d_bwd_weight_two_stage_xdl_ngchw_gkcyx_ngkhw_bf16_pipev2_instances(
+                        op_ptrs);
+                    add_device_grouped_conv2d_bwd_weight_two_stage_xdl_ngchw_gkcyx_ngkhw_bf16_pipev5_instances(
+                        op_ptrs);
+                }
+#endif
+            }
         }
         if constexpr(NumDimSpatial == 3)
         {
