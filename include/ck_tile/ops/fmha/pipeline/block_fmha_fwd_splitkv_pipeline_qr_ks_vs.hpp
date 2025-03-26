@@ -702,6 +702,7 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                           kv_l2p_offset,
                           smem_ptr);
     }
+
 };
 
 } // namespace ck_tile

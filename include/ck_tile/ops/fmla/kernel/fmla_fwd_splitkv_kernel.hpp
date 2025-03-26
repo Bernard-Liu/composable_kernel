@@ -564,7 +564,7 @@ struct FmlaFwdSplitKVKernel
 			const IndexDataType n_block_min = batch_id == begin_idx ? begin_seqlen / FmlaPipeline::kM0 : 0;
 			const IndexDataType n_block_max = batch_id == end_idx ? ck_tile::integer_divide_ceil(end_seqlen, FmlaPipeline::kM0) : n_max_block;
 
-			const bool NoSplit = n_block_min == 0 && n_block_max == n_max_block);
+			const bool NoSplit = (n_block_min == 0 && n_block_max == n_max_block);
 			ck_tile::index_t i_split = reinterpret_cast<IndexDataType*>(args.num_splits_ptr)[batch_id] + n_split_idx;
 
 			auto lse_acc_dram_window = lse_acc_dram_window_func(i_split);
@@ -589,7 +589,14 @@ struct FmlaFwdSplitKVKernel
 										  identity{},            // s_acc_element_func
 										  scales{kargs.scale_p}, // p_compute_element_func
 										  identity{},            // o_acc_element_func
-										  kargs.num_splits,
+                                          {
+                                               n_max_block,
+                                               n_block_min,
+                                               n_block_max,
+                                               i_split,
+                                               i_block_m,
+                                               i_nhead,
+                                          },
 										  i_split_,
 										  mask(i_split),
 										  kargs.scale_s,
@@ -604,7 +611,14 @@ struct FmlaFwdSplitKVKernel
 										  v_page_block_navigator,
 										  bias_dram_window,
 										  lse_acc_dram_window,
-										  kargs.num_splits,
+                                          {
+                                               n_max_block,
+                                               n_block_min,
+                                               n_block_max,
+                                               i_split,
+                                               i_block_m,
+                                               i_nhead,
+                                          },
 										  i_split_,
 										  mask(i_split),
 										  kargs.scale_s,
