@@ -555,8 +555,8 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
 
             auto dot_reg_tensor = load_tile(dot_lds_read_window);
 
-            HotLoopScheduler::template GemmStagedScheduler<0>();
-            __builtin_amdgcn_sched_barrier(0);
+            // HotLoopScheduler::template GemmStagedScheduler<0>();
+            // __builtin_amdgcn_sched_barrier(0);
             // STAGE 2, Scale, Add bias, Mask, Softmax, Dropout
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
@@ -671,8 +671,8 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
 
             gemm_1(dv_acc, pt_reg_tensor, dot_reg_tensor);
 
-            HotLoopScheduler::template GemmStagedScheduler<1>();
-            __builtin_amdgcn_sched_barrier(0);
+            // HotLoopScheduler::template GemmStagedScheduler<1>();
+            // __builtin_amdgcn_sched_barrier(0);
             // STAGE 4, OGrad@V Gemm2
             auto dp_acc = SPGradBlockTileType{};
 
@@ -692,8 +692,8 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
 
             store_tile(d_lds_write_window, d_block_tile);
 
-            HotLoopScheduler::template GemmStagedScheduler<2>();
-            __builtin_amdgcn_sched_barrier(0);
+            // HotLoopScheduler::template GemmStagedScheduler<2>();
+            // __builtin_amdgcn_sched_barrier(0);
             // STAGE 5, P^T(PGrad^T - D)
             auto ds                 = SPGradBlockTileType{};
             constexpr auto ds_spans = decltype(ds)::get_distributed_spans();
@@ -754,8 +754,8 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
             q_reg_tensor = load_tile(q_lds_read_window);
             lse          = load_tile(lse_lds_read_window);
 
-            HotLoopScheduler::template GemmStagedScheduler<3>();
-            __builtin_amdgcn_sched_barrier(0);
+            // HotLoopScheduler::template GemmStagedScheduler<3>();
+            // __builtin_amdgcn_sched_barrier(0);
             // STAGE7 SGrad@K^T Gemm4
             auto dq_acc = QGradBlockTileType{};
             clear_tile(dq_acc);
@@ -781,6 +781,10 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
             do_reg_tensor = load_tile(do_lds_read_window);
             d             = load_tile(d_lds_read_window);
 
+            HotLoopScheduler::template GemmStagedScheduler<0>();
+            HotLoopScheduler::template GemmStagedScheduler<1>();
+            HotLoopScheduler::template GemmStagedScheduler<2>();
+            HotLoopScheduler::template GemmStagedScheduler<3>();
             HotLoopScheduler::template GemmStagedScheduler<4>();
 
             // QGrad Scale
@@ -921,8 +925,8 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
         auto dot_reg_tensor = load_tile(dot_lds_read_window);
         gemm_1(dv_acc, pt_reg_tensor, dot_reg_tensor);
 
-        HotLoopScheduler::template GemmStagedScheduler<1>();
-        __builtin_amdgcn_sched_barrier(0);
+        // HotLoopScheduler::template GemmStagedScheduler<1>();
+        // __builtin_amdgcn_sched_barrier(0);
 
         // STAGE 4, OGrad@V Gemm2
         auto dp_acc = SPGradBlockTileType{};
@@ -931,8 +935,8 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
 
         dp_acc = gemm_2(do_reg_tensor, v_reg_tensor);
 
-        HotLoopScheduler::template GemmStagedScheduler<2>();
-        __builtin_amdgcn_sched_barrier(0);
+        // HotLoopScheduler::template GemmStagedScheduler<2>();
+        // __builtin_amdgcn_sched_barrier(0);
 
         // STAGE 5, P^T(PGrad^T - D)
         auto ds                 = SPGradBlockTileType{};
@@ -990,8 +994,8 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
         auto ds_reg_tensor_next = decltype(ds_reg_tensor){};
         move_tile_window(ds_lds_read_window, {0, kK4});
 
-        HotLoopScheduler::template GemmStagedScheduler<3>();
-        __builtin_amdgcn_sched_barrier(0);
+        // HotLoopScheduler::template GemmStagedScheduler<3>();
+        // __builtin_amdgcn_sched_barrier(0);
         // STAGE 7, SGrad@K^T Gemm4
         auto dq_acc = QGradBlockTileType{};
         clear_tile(dq_acc);
@@ -1011,7 +1015,10 @@ struct BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP
                 ds_reg_tensor.get_thread_buffer() = ds_reg_tensor_next.get_thread_buffer();
             }
         });
-
+        HotLoopScheduler::template GemmStagedScheduler<0>();
+        HotLoopScheduler::template GemmStagedScheduler<1>();
+        HotLoopScheduler::template GemmStagedScheduler<2>();
+        HotLoopScheduler::template GemmStagedScheduler<3>();
         HotLoopScheduler::template GemmStagedScheduler<4>();
         __builtin_amdgcn_sched_barrier(0);
 

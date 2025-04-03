@@ -18,7 +18,7 @@
 #include <vector>
 
 // Convert DQ
-using fmha_dtype_0 = FmhaBwdFp16;
+using fmha_dtype_0 = FmhaBwdBf16;
 
 using fmha_bwd_convert_dq_trait_0 = ck_tile::TileFmhaBwdConvertQGradTraits<false, false, 2>;
 
@@ -39,7 +39,7 @@ using fmha_bwd_convert_dq_0 =
 using fmha_bwd_convert_dq_kernel_0 = ck_tile::FmhaBwdConvertQGradKernel<fmha_bwd_convert_dq_0>;
 
 using convert_dq_trait_0 =
-    fmha_bwd_convert_dq_traits_<128, FmhaBwdFp16, false, false, false, false>;
+    fmha_bwd_convert_dq_traits_<128, FmhaBwdBf16, false, false, false, false>;
 
 template <>
 void fmha_bwd_convert_dq_oneshot_<convert_dq_trait_0>(const ck_tile::stream_config& s,
@@ -124,14 +124,14 @@ using fmha_bwd_pipeline_0 =
     ck_tile::BlockFmhaBwdDQDKDVPipelineKRKTRVRIGLP<fmha_bwd_pipeline_problem_0>;
 
 using fmha_bwd_dk_epilogue_0 = ck_tile::Default2DEpilogue<
-    ck_tile::Default2DEpilogueProblem<typename FmhaBwdTypeConfig<FmhaBwdFp16>::AccDataType,
-                                      typename FmhaBwdTypeConfig<FmhaBwdFp16>::KGradDataType,
+    ck_tile::Default2DEpilogueProblem<typename FmhaBwdTypeConfig<FmhaBwdBf16>::AccDataType,
+                                      typename FmhaBwdTypeConfig<FmhaBwdBf16>::KGradDataType,
                                       false,
                                       false>>;
 
 using fmha_bwd_dv_epilogue_0 = ck_tile::Default2DEpilogue<
-    ck_tile::Default2DEpilogueProblem<typename FmhaBwdTypeConfig<FmhaBwdFp16>::AccDataType,
-                                      typename FmhaBwdTypeConfig<FmhaBwdFp16>::VGradDataType,
+    ck_tile::Default2DEpilogueProblem<typename FmhaBwdTypeConfig<FmhaBwdBf16>::AccDataType,
+                                      typename FmhaBwdTypeConfig<FmhaBwdBf16>::VGradDataType,
                                       false,
                                       false>>;
 
@@ -139,7 +139,7 @@ using fmha_bwd_dq_dk_dv_kernel_0 = ck_tile::
     FmhaBwdDQDKDVKernel<fmha_bwd_pipeline_0, fmha_bwd_dk_epilogue_0, fmha_bwd_dv_epilogue_0>;
 
 using dq_dk_dv_trait_0 = fmha_bwd_dq_dk_dv_traits_<128,
-                                                   FmhaBwdFp16,
+                                                   FmhaBwdBf16,
                                                    false,
                                                    ck_tile::BlockFmhaBwdPipelineEnum::KRKTRVR_IGLP,
                                                    fmha_mask_0,
@@ -187,7 +187,7 @@ using fmha_bwd_dot_do_o_0 =
 
 using fmha_bwd_dot_do_o_kernel_0 = ck_tile::FmhaBwdOGradDotOKernel<fmha_bwd_dot_do_o_0>;
 
-using dot_do_o_trait_0 = fmha_bwd_dot_do_o_traits_<128, FmhaBwdFp16, false, false, false>;
+using dot_do_o_trait_0 = fmha_bwd_dot_do_o_traits_<128, FmhaBwdBf16, false, false, false>;
 
 template <>
 void fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_0>(const ck_tile::stream_config& s, fmha_bwd_args a)
@@ -235,13 +235,13 @@ float fmha_bwd_(const ck_tile::stream_config& s, fmha_bwd_args a)
     return ck_tile::launch_kernel(
         s,
         // [=](const ck_tile::stream_config& s_) {
-            // fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);
+        //     fmha_bwd_dot_do_o_oneshot_<dot_do_o_trait_>(s_, a);
         // },
         [=](const ck_tile::stream_config& s_) {
             fmha_bwd_dq_dk_dv_oneshot_<dq_dk_dv_trait_>(s_, a);
         // },
         // [=](const ck_tile::stream_config& s_) {
-            // fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);
+        //     fmha_bwd_convert_dq_oneshot_<convert_dq_trait_>(s_, a);
         });
 }
 
@@ -254,10 +254,10 @@ float fmha_bwd(fmha_bwd_traits t, fmha_bwd_args a, const ck_tile::stream_config&
        (a.seqlen_q % 16 == 0 and a.seqlen_q % 64 == 0) && (a.seqlen_k % 128 == 0) &&
        (a.hdim_q % 128 == 0) && (a.hdim_v % 128 == 0) && (t.is_deterministic == false))
     {
-        using dot_do_o_trait_ = fmha_bwd_dot_do_o_traits_<128, FmhaBwdFp16, false, false, false>;
+        using dot_do_o_trait_ = fmha_bwd_dot_do_o_traits_<128, FmhaBwdBf16, false, false, false>;
         using dq_dk_dv_trait_ =
             fmha_bwd_dq_dk_dv_traits_<128,
-                                      FmhaBwdFp16,
+                                      FmhaBwdBf16,
                                       false,
                                       ck_tile::BlockFmhaBwdPipelineEnum::KRKTRVR_IGLP,
                                       ck_tile::SimplifiedGenericAttentionMask<false>,
@@ -270,7 +270,7 @@ float fmha_bwd(fmha_bwd_traits t, fmha_bwd_args a, const ck_tile::stream_config&
                                       false,
                                       false>;
         using convert_dq_trait_ =
-            fmha_bwd_convert_dq_traits_<128, FmhaBwdFp16, false, false, false, false>;
+            fmha_bwd_convert_dq_traits_<128, FmhaBwdBf16, false, false, false, false>;
         r = fmha_bwd_<dot_do_o_trait_, dq_dk_dv_trait_, convert_dq_trait_>(s, a);
         return r;
     }
@@ -358,7 +358,7 @@ auto get_elimit(ck_tile::index_t /*hdim_q*/, ck_tile::index_t /*hdim_v*/)
 }
 
 template <>
-auto get_elimit<FmhaBwdFp16>(ck_tile::index_t hdim_q, ck_tile::index_t hdim_v)
+auto get_elimit<FmhaBwdBf16>(ck_tile::index_t hdim_q, ck_tile::index_t hdim_v)
 {
     double rtol = 1e-2;
     double atol = 1e-2;
@@ -819,12 +819,12 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
     float ave_time = fmha_bwd(fmha_traits, fmha_args, stream_config);
     // using instance:
-    // using dot_do_o_trait_ = fmha_bwd_dot_do_o_traits_<128, FmhaBwdFp16, false, false, false>;
-    // using dq_dk_dv_trait_ = fmha_bwd_dq_dk_dv_traits_<128, FmhaBwdFp16, false,
+    // using dot_do_o_trait_ = fmha_bwd_dot_do_o_traits_<128, FmhaBwdBf16, false, false, false>;
+    // using dq_dk_dv_trait_ = fmha_bwd_dq_dk_dv_traits_<128, FmhaBwdBf16, false,
     // ck_tile::BlockFmhaBwdPipelineEnum::KRKTRVR_IGLP,
     // ck_tile::SimplifiedGenericAttentionMask<false>, ck_tile::BlockDropoutBwd<false, true, false>,
     // ck_tile::BlockAttentionBiasEnum::NO_BIAS, false, false, false, false, false, false>; using
-    // convert_dq_trait_ = fmha_bwd_convert_dq_traits_<128, FmhaBwdFp16, false, false, false,
+    // convert_dq_trait_ = fmha_bwd_convert_dq_traits_<128, FmhaBwdBf16, false, false, false,
     // false>; r = fmha_bwd_<dot_do_o_trait_, dq_dk_dv_trait_, convert_dq_trait_>(s, a); return r;
     if(ave_time < 0)
     {
@@ -1242,11 +1242,11 @@ int main(int argc, char* argv[])
     const std::string data_type = arg_parser.get_str("prec");
     if(data_type == "fp16")
     {
-        return run<FmhaBwdFp16>(arg_parser) ? 0 : -2;
+        return run<FmhaBwdBf16>(arg_parser) ? 0 : -2;
     }
     else if(data_type == "bf16")
     {
-        return run<FmhaBwdFp16>(arg_parser) ? 0 : -2;
+        return run<FmhaBwdBf16>(arg_parser) ? 0 : -2;
     }
 
     return -3;
