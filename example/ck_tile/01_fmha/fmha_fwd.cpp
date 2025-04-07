@@ -565,7 +565,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
         return false;
     }
 #if CK_TILE_FMHA_FWD_SPLITKV_API
-    if(0 < p_drop && (1 < num_splits || use_kvcache))
+    if(0 < p_drop && 1 < num_splits)
     {
         std::cerr << "dropout is not supoprted by split-kv kernels. ignoring the 'p_drop' option"
                   << std::endl;
@@ -633,16 +633,16 @@ bool run(const ck_tile::ArgParser& arg_parser)
         std::max(shape_seqlen_q, shape_seqlen_k), rotary_dim, seed);
 
     ck_tile::HostTensor<LSEDataType> lse_acc_host(
-        1 < num_splits || use_kvcache
+        1 < num_splits
             ? std::array<ck_tile::index_t, 4>{shape_batch, nhead, num_splits, shape_seqlen_q}
             : std::array<ck_tile::index_t, 4>{1, 1, 1, 1});
     ck_tile::HostTensor<OaccDataType> o_acc_host(
-        1 < num_splits || use_kvcache ? std::array<ck_tile::index_t, 5>{shape_batch,
-                                                                        nhead,
-                                                                        num_splits,
-                                                                        shape_seqlen_q,
-                                                                        hdim_v}
-                                      : std::array<ck_tile::index_t, 5>{1, 1, 1, 1, 1});
+        1 < num_splits ? std::array<ck_tile::index_t, 5>{shape_batch,
+                                                         nhead,
+                                                         num_splits,
+                                                         shape_seqlen_q,
+                                                         hdim_v}
+                       : std::array<ck_tile::index_t, 5>{1, 1, 1, 1, 1});
 
     // batch mode of lse data layout is [batch, nhead, seqlen_q]
     // group mode of lse data layout is [nhead, total_seqlen_q]
@@ -1041,6 +1041,18 @@ bool run(const ck_tile::ArgParser& arg_parser)
                     args.drop_seed_offset = std::make_pair(drop_seed, drop_offset);
                 }
             }
+            else if(std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
+            {
+                args.rand_val_ptr = randval_buf.GetDeviceBuffer();
+
+                args.stride_randval       = stride_randval;
+                args.nhead_stride_randval = nhead_stride_randval;
+                args.batch_stride_randval = batch_stride_randval;
+
+                args.p_drop           = p_drop;
+                args.s_randval        = s_randval;
+                args.drop_seed_offset = std::make_pair(drop_seed, drop_offset);
+            }
             else if constexpr(std::is_same_v<fmha_fwd_splitkv_args, std::decay_t<decltype(args)>>)
             {
                 args.lse_acc_ptr = lse_acc_buf.GetDeviceBuffer();
@@ -1086,7 +1098,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
     const float fwd_ave_time = [&] {
 #if CK_TILE_FMHA_FWD_SPLITKV_API
-        if(1 < num_splits || use_kvcache)
+        if(1 < num_splits)
         {
             fmha_fwd_splitkv_traits fmha_splitkv_traits;
             init_traits(fmha_splitkv_traits);
@@ -1095,6 +1107,18 @@ bool run(const ck_tile::ArgParser& arg_parser)
             init_args(fmha_splitkv_args);
 
             return fmha_fwd_splitkv(fmha_splitkv_traits, fmha_splitkv_args, stream_config);
+        }
+#endif
+#if CK_TILE_FMHA_FWD_PAGEDKV_API
+        if(use_kvcache)
+        {
+            fmha_fwd_pagedkv_traits fmha_pagedkv_traits;
+            init_traits(fmha_pagedkv_traits);
+
+            fmha_fwd_pagedkv_args fmha_pagedkv_args;
+            init_args(fmha_pagedkv_args);
+
+            return fmha_fwd_pagedkv(fmha_pagedkv_traits, fmha_pagedkv_args, stream_config);
         }
 #endif
         fmha_fwd_traits fmha_traits;
