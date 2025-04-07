@@ -18,8 +18,8 @@
 #include <utility>
 #include <vector>
 
-#if CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_SPLITKV_API
-#error "we should enable fmha_fwd_splitkv() api in order to cooperate with fmha_fwd_appendkv()"
+#if CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_PAGEDKV_API
+#error "we should enable fmha_fwd_pagedkv() api in order to cooperate with fmha_fwd_appendkv()"
 #endif
 
 template <typename T>
@@ -342,7 +342,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
     }
 
     ck_tile::index_t page_block_size = arg_parser.get_int("page_block_size");
-#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_SPLITKV_API
+#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_PAGEDKV_API
     if(0 < page_block_size)
     {
         std::cerr << "paged-kvcache is not supported. ignoring the 'page_block_size' option"
@@ -358,7 +358,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
     }
 
     bool use_cache_batch_idx = arg_parser.get_bool("cache_batch_idx");
-#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_SPLITKV_API
+#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_PAGEDKV_API
     if(use_cache_batch_idx)
     {
         std::cerr << "split-kv is not supported. ignoring the 'cache_batch_idx' option"
@@ -824,13 +824,15 @@ bool run(const ck_tile::ArgParser& arg_parser)
     {
         std::cout << ", num_splits:" << num_splits;
     }
-    if(0 < page_block_size)
-    {
-        std::cout << ", page_block_size:" << page_block_size;
-    }
     if(use_cache_batch_idx)
     {
         std::cout << ", cache_batch_idx:" << use_cache_batch_idx;
+    }
+#endif
+#if CK_TILE_FMHA_FWD_PAGEDKV_API
+    if(0 < page_block_size)
+    {
+        std::cout << ", page_block_size:" << page_block_size;
     }
 #endif
     std::cout << std::flush;
@@ -1275,7 +1277,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             q_host_ref.ForEach([&](auto& self, auto i) { self(i) = q_host_ref_ro(i); });
         }
 #endif
-#if CK_TILE_FMHA_FWD_SPLITKV_API
+#if CK_TILE_FMHA_FWD_PAGEDKV_API
         if(0 < page_block_size) {
             if(i_perm) {
                 k_host_ref.ForEach([&](auto& self, auto i) {
@@ -1326,7 +1328,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             });
         }
 #endif
-#if CK_TILE_FMHA_FWD_SPLITKV_API
+#if CK_TILE_FMHA_FWD_PAGEDKV_API
         if(0 < page_block_size) {
             if(is_v_rowmajor) {
                 if(i_perm) {
