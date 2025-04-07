@@ -519,6 +519,8 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
                                          args.nhead_stride_randval,
                                          args.nhead_stride_lse,
                                          args.nhead_stride_o,
+                                         args.batch_stride_k,
+                                         args.batch_stride_v,
                                          args.window_size_left,
                                          args.window_size_right,
                                          args.mask_type,
