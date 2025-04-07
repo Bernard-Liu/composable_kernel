@@ -1045,6 +1045,11 @@ bool run(const ck_tile::ArgParser& arg_parser)
             }
             else if(std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
             {
+                args.block_table_ptr =
+                    (0 < page_block_size ? block_table_buf.GetDeviceBuffer() : nullptr);
+                args.batch_stride_block_table = batch_stride_block_table;
+                args.page_block_size          = page_block_size;
+
                 args.rand_val_ptr = randval_buf.GetDeviceBuffer();
 
                 args.stride_randval       = stride_randval;

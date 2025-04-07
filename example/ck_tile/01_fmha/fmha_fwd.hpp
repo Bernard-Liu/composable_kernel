@@ -200,6 +200,10 @@ struct fmha_fwd_pagedkv_args
     ck_tile::index_t nhead_q;
     ck_tile::index_t nhead_k;
 
+    void* block_table_ptr;
+    ck_tile::index_t batch_stride_block_table; // only used if 'block_table_ptr' is not nullptr
+    ck_tile::index_t page_block_size;          // only used if 'block_table_ptr' is not nullptr
+
     float scale_s;
     float scale_p;
     float scale_o;
@@ -496,6 +500,9 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
                                          args.hdim_v,
                                          args.nhead_q,
                                          args.nhead_q / args.nhead_k,
+                                         args.block_table_ptr,
+                                         args.batch_stride_block_table,
+                                         args.page_block_size,
                                          args.scale_s,
                                          args.scale_p,
                                          args.scale_o,
@@ -534,6 +541,9 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
                                          args.hdim_v,
                                          args.nhead_q,
                                          args.nhead_q / args.nhead_k,
+                                         args.block_table_ptr,
+                                         args.batch_stride_block_table,
+                                         args.page_block_size,
                                          args.scale_s,
                                          args.scale_p,
                                          args.scale_o,

@@ -126,6 +126,11 @@ struct FmhaFwdPagedKVKernel
         // for MQA/GQA, nhead could be different. This parameter is nhead_q / nhead_k
         // if this param is larger than 1, indicate MQA/GQA case
         ck_tile::index_t nhead_ratio_qk;
+
+        const int32_t* block_table_ptr;
+        ck_tile::index_t batch_stride_block_table;
+        ck_tile::index_t page_block_size;
+
         float scale_s;
 
         ck_tile::index_t stride_q;
@@ -260,6 +265,9 @@ struct FmhaFwdPagedKVKernel
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head_q,
               ck_tile::index_t nhead_ratio_qk,
+              const void* block_table_ptr,
+              ck_tile::index_t batch_stride_block_table,
+              ck_tile::index_t page_block_size,
               float scale_s,
               float scale_p,
               float scale_o,
@@ -300,6 +308,9 @@ struct FmhaFwdPagedKVKernel
                      hdim_v,
                      num_head_q,
                      nhead_ratio_qk,
+                     reinterpret_cast<const int32_t*>(block_table_ptr),
+                     batch_stride_block_table,
+                     page_block_size,
 #if CK_TILE_FMHA_FWD_FAST_EXP2
                      static_cast<float>(scale_s * ck_tile::log2e_v<>),
 #else
@@ -383,6 +394,9 @@ struct FmhaFwdPagedKVKernel
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head_q,
               ck_tile::index_t nhead_ratio_qk,
+              const void* block_table_ptr,
+              ck_tile::index_t batch_stride_block_table,
+              ck_tile::index_t page_block_size,
               float scale_s,
               float scale_p,
               float scale_o,
@@ -416,6 +430,9 @@ struct FmhaFwdPagedKVKernel
                      hdim_v,
                      num_head_q,
                      nhead_ratio_qk,
+                     reinterpret_cast<const int32_t*>(block_table_ptr),
+                     batch_stride_block_table,
+                     page_block_size,
 #if CK_TILE_FMHA_FWD_FAST_EXP2
                      static_cast<float>(scale_s * ck_tile::log2e_v<>),
 #else
