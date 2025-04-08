@@ -245,7 +245,6 @@ struct FmhaFwdPagedKVKernel
     {
         const int32_t* seqstart_q_ptr;
         const int32_t* seqstart_k_ptr;
-        const int32_t* seqlen_k_ptr;
         ck_tile::index_t batch_stride_k;
         ck_tile::index_t batch_stride_v;
     };
@@ -391,7 +390,6 @@ struct FmhaFwdPagedKVKernel
               void* o_ptr,
               const void* seqstart_q_ptr,
               const void* seqstart_k_ptr,
-              const void* seqlen_k_ptr,
               ck_tile::index_t hdim_q,
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head_q,
@@ -457,7 +455,6 @@ struct FmhaFwdPagedKVKernel
                     {},               // placeholder for dropout
                     reinterpret_cast<const int32_t*>(seqstart_q_ptr),
                     reinterpret_cast<const int32_t*>(seqstart_k_ptr),
-                    reinterpret_cast<const int32_t*>(seqlen_k_ptr),
                     batch_stride_k,
                     batch_stride_v};
 
@@ -505,75 +502,32 @@ struct FmhaFwdPagedKVKernel
     CK_TILE_HOST static constexpr auto GridSize(ck_tile::index_t batch_size_,
                                                 ck_tile::index_t nhead_,
                                                 ck_tile::index_t seqlen_q_,
-                                                ck_tile::index_t hdim_v_,
-                                                bool has_padded_seqlen_k = false)
+                                                ck_tile::index_t hdim_v_)
     {
-        // has_padded_seqlen_k is determined by checking (seqlen_k_ptr != nullptr)
-        if(has_padded_seqlen_k)
-        {
-            // TODO: this may need tuning
-            return dim3(nhead_,
-                        batch_size_,
-                        ck_tile::integer_divide_ceil(seqlen_q_, FmhaPipeline::kM0) *
-                            ck_tile::integer_divide_ceil(hdim_v_, FmhaPipeline::kN1));
-        }
-        else
-        {
-            // TODO: this may need tuning
-            return dim3(ck_tile::integer_divide_ceil(seqlen_q_, FmhaPipeline::kM0) *
-                            ck_tile::integer_divide_ceil(hdim_v_, FmhaPipeline::kN1),
-                        nhead_,
-                        batch_size_);
-        }
+        // TODO: this may need tuning
+        return dim3(ck_tile::integer_divide_ceil(seqlen_q_, FmhaPipeline::kM0) *
+                        ck_tile::integer_divide_ceil(hdim_v_, FmhaPipeline::kN1),
+                    nhead_,
+                    batch_size_);
     }
 
     CK_TILE_DEVICE static constexpr auto GetTileIndex(const Kargs& kargs)
     {
-        bool has_padded_seqlen_k = false;
+        const index_t num_tile_n1 = ck_tile::integer_divide_ceil(kargs.hdim_v, FmhaPipeline::kN1);
 
-        if constexpr(kIsGroupMode)
-            has_padded_seqlen_k = (kargs.seqlen_k_ptr != nullptr);
+        const index_t i_block = blockIdx.x;
+        const index_t i_nhead = blockIdx.y;
+        const index_t i_batch = blockIdx.z;
 
-        if(has_padded_seqlen_k)
-        {
-            // const index_t num_tile_m0 = seqlen_q / kM0;
-            const index_t num_tile_n1 =
-                ck_tile::integer_divide_ceil(kargs.hdim_v, FmhaPipeline::kN1);
+        const auto f = [](index_t dividend, index_t divisor) {
+            index_t quotient = dividend / divisor;
+            index_t modulus  = dividend - quotient * divisor;
+            return ck_tile::make_tuple(quotient, modulus);
+        };
 
-            const index_t i_block = blockIdx.z;
-            const index_t i_nhead = blockIdx.x;
-            const index_t i_batch = blockIdx.y;
+        const auto [i_tile_m, i_tile_n] = f(i_block, num_tile_n1);
 
-            const auto f = [](index_t dividend, index_t divisor) {
-                index_t quotient = dividend / divisor;
-                index_t modulus  = dividend - quotient * divisor;
-                return ck_tile::make_tuple(quotient, modulus);
-            };
-
-            const auto [i_tile_m, i_tile_n] = f(i_block, num_tile_n1);
-
-            return ck_tile::make_tuple(i_tile_m, i_tile_n, i_nhead, i_batch);
-        }
-        else
-        {
-            // const index_t num_tile_m0 = seqlen_q / kM0;
-            const index_t num_tile_n1 =
-                ck_tile::integer_divide_ceil(kargs.hdim_v, FmhaPipeline::kN1);
-
-            const index_t i_block = blockIdx.x;
-            const index_t i_nhead = blockIdx.y;
-            const index_t i_batch = blockIdx.z;
-
-            const auto f = [](index_t dividend, index_t divisor) {
-                index_t quotient = dividend / divisor;
-                index_t modulus  = dividend - quotient * divisor;
-                return ck_tile::make_tuple(quotient, modulus);
-            };
-
-            const auto [i_tile_m, i_tile_n] = f(i_block, num_tile_n1);
-
-            return ck_tile::make_tuple(i_tile_m, i_tile_n, i_nhead, i_batch);
-        }
+        return ck_tile::make_tuple(i_tile_m, i_tile_n, i_nhead, i_batch);
     }
 
     CK_TILE_HOST static constexpr auto BlockSize() { return dim3(kBlockSize); }
@@ -643,15 +597,7 @@ struct FmhaFwdPagedKVKernel
                 return;
             }
 
-            if(kargs.seqlen_k_ptr != nullptr)
-            {
-                kargs.seqlen_k = kargs.seqlen_k_ptr[i_batch];
-            }
-            else
-            {
-                const auto adjusted_seqstart_k_ptr = kargs.seqstart_k_ptr + i_batch;
-                kargs.seqlen_k = adjusted_seqstart_k_ptr[1] - adjusted_seqstart_k_ptr[0];
-            }
+            kargs.seqlen_k = kargs.seqstart_k_ptr[i_batch + 1] - kargs.seqstart_k_ptr[i_batch];
         }
         else
         {

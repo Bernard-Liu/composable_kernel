@@ -987,7 +987,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             args.batch_stride_knew = batch_stride_knew;
             args.batch_stride_vnew = batch_stride_vnew;
         }
-        else // fmha_fwd_args or fmha_fwd_splitkv_args
+        else // fmha_fwd_args or fmha_fwd_pagedkv_args or fmha_fwd_splitkv_args
         {
             args.bias_ptr = bias.type == bias_enum::alibi ? alibi_slope_buf.GetDeviceBuffer()
                                                           : bias_buf.GetDeviceBuffer();
@@ -998,9 +998,13 @@ bool run(const ck_tile::ArgParser& arg_parser)
                 (mode == mode_enum::group ? seqstart_q.GetDeviceBuffer() : nullptr);
             args.seqstart_k_ptr =
                 (mode == mode_enum::group ? seqstart_k.GetDeviceBuffer() : nullptr);
-            args.seqlen_k_ptr = ((mode == mode_enum::batch && use_kvcache) || 0 <= k_paddings_[0]
-                                     ? seqlen_k_buf.GetDeviceBuffer()
-                                     : nullptr);
+            if constexpr(!std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
+            {
+                args.seqlen_k_ptr =
+                    ((mode == mode_enum::batch && use_kvcache) || 0 <= k_paddings_[0]
+                         ? seqlen_k_buf.GetDeviceBuffer()
+                         : nullptr);
+            }
 
             args.seqlen_k     = shape_seqlen_k; // unused in group mode (or kvcache enabled)
             args.max_seqlen_q = max_seqlen_q;

@@ -188,8 +188,6 @@ struct fmha_fwd_pagedkv_args
 
     const void* seqstart_q_ptr;
     const void* seqstart_k_ptr;
-    const void*
-        seqlen_k_ptr; // only used if both 'seqstart_q_ptr' & 'seqstart_k_ptr' are not nullptr
 
     ck_tile::index_t seqlen_q;
     ck_tile::index_t seqlen_k;
@@ -495,7 +493,6 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
                                          args.o_ptr,
                                          args.seqstart_q_ptr,
                                          args.seqstart_k_ptr,
-                                         args.seqlen_k_ptr,
                                          args.hdim_q,
                                          args.hdim_v,
                                          args.nhead_q,
@@ -580,14 +577,12 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
 
     if constexpr(FmhaKernel::kIsGroupMode)
     {
-        dim3 grids = FmhaKernel::GridSize(
-            args.batch, args.nhead_q, args.max_seqlen_q, args.hdim_v, args.seqlen_k_ptr != nullptr);
+        dim3 grids = FmhaKernel::GridSize(args.batch, args.nhead_q, args.max_seqlen_q, args.hdim_v);
         return ck_tile::make_tuple(kargs, grids);
     }
     else
     {
-        dim3 grids =
-            FmhaKernel::GridSize(args.batch, args.nhead_q, args.max_seqlen_q, args.hdim_v, false);
+        dim3 grids = FmhaKernel::GridSize(args.batch, args.nhead_q, args.max_seqlen_q, args.hdim_v);
         return ck_tile::make_tuple(kargs, grids);
     }
 }
