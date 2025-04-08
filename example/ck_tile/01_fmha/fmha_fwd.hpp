@@ -535,7 +535,7 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
                                          args.lse_ptr,
                                          args.o_ptr,
                                          args.seqlen_q,
-                                         args.seqlen_k,
+                                         args.seqstart_k_ptr,
                                          args.hdim_q,
                                          args.hdim_v,
                                          args.nhead_q,

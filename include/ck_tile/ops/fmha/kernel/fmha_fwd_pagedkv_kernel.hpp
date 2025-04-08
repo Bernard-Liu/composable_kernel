@@ -225,6 +225,7 @@ struct FmhaFwdPagedKVKernel
           std::conditional_t<kDoFp8StaticQuant, FmhaFwdFp8StaticQuantKargs, FmhaFwdEmptyKargs<3>>,
           std::conditional_t<kHasDropout, FmhaFwdBatchModeDropoutKargs, FmhaFwdEmptyKargs<4>>
     {
+        const int32_t* seqstart_k_ptr;
         ck_tile::index_t batch_stride_q;
         ck_tile::index_t batch_stride_k;
         ck_tile::index_t batch_stride_v;
@@ -261,7 +262,7 @@ struct FmhaFwdPagedKVKernel
               void* lse_ptr,
               void* o_ptr,
               ck_tile::index_t seqlen_q,
-              ck_tile::index_t seqlen_k,
+              const void* seqstart_k_ptr,
               ck_tile::index_t hdim_q,
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head_q,
@@ -304,7 +305,7 @@ struct FmhaFwdPagedKVKernel
                      v_ptr,
                      o_ptr,
                      seqlen_q,
-                     seqlen_k,
+                     -1,
                      hdim_q,
                      hdim_v,
                      num_head_q,
@@ -330,6 +331,7 @@ struct FmhaFwdPagedKVKernel
                     {},               // placeholder for lse
                     {},               // placeholder for fp8_static_quant args
                     {},               // placeholder for dropout
+                    reinterpret_cast<const int32_t*>(seqstart_k_ptr),
                     batch_stride_q,
                     batch_stride_k,
                     batch_stride_v,
@@ -549,8 +551,6 @@ struct FmhaFwdPagedKVKernel
         const index_t i_n1 = __builtin_amdgcn_readfirstlane(i_tile_n * FmhaPipeline::kN1);
 
         long_index_t batch_offset_q       = 0;
-        long_index_t batch_offset_k       = 0;
-        long_index_t batch_offset_v       = 0;
         long_index_t batch_offset_bias    = 0;
         long_index_t batch_offset_randval = 0;
         long_index_t batch_offset_lse     = 0;
@@ -560,18 +560,8 @@ struct FmhaFwdPagedKVKernel
         {
             // get starting offset for each batch
             const long_index_t query_start = kargs.seqstart_q_ptr[i_batch];
-            const long_index_t key_start   = kargs.seqstart_k_ptr[i_batch];
 
             batch_offset_q = query_start * kargs.stride_q;
-            batch_offset_k = key_start * kargs.stride_k;
-            if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
-            {
-                batch_offset_v = key_start * kargs.stride_v;
-            }
-            else
-            {
-                batch_offset_v = key_start;
-            }
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
                 batch_offset_bias = query_start * kargs.stride_bias;
@@ -587,8 +577,7 @@ struct FmhaFwdPagedKVKernel
             batch_offset_o = query_start * kargs.stride_o;
 
             // get real # queries & # keys under group mode
-            const auto adjusted_seqstart_q_ptr = kargs.seqstart_q_ptr + i_batch;
-            kargs.seqlen_q = adjusted_seqstart_q_ptr[1] - adjusted_seqstart_q_ptr[0];
+            kargs.seqlen_q = kargs.seqstart_q_ptr[i_batch + 1] - query_start;
 
             // # of required blocks is different in each groups, terminate unnecessary blocks
             // earlier
@@ -602,8 +591,6 @@ struct FmhaFwdPagedKVKernel
         else
         {
             batch_offset_q = static_cast<long_index_t>(i_batch) * kargs.batch_stride_q;
-            batch_offset_k = static_cast<long_index_t>(i_batch) * kargs.batch_stride_k;
-            batch_offset_v = static_cast<long_index_t>(i_batch) * kargs.batch_stride_v;
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
                 batch_offset_bias = static_cast<long_index_t>(i_batch) * kargs.batch_stride_bias;
@@ -618,6 +605,8 @@ struct FmhaFwdPagedKVKernel
                     static_cast<long_index_t>(i_batch) * kargs.batch_stride_randval;
             }
             batch_offset_o = static_cast<long_index_t>(i_batch) * kargs.batch_stride_o;
+
+            kargs.seqlen_k = kargs.seqstart_k_ptr[i_batch + 1] - kargs.seqstart_k_ptr[i_batch];
         }
 
         // for simplicity, batch stride we just modify the pointer
@@ -626,14 +615,6 @@ struct FmhaFwdPagedKVKernel
         const QDataType* q_ptr = reinterpret_cast<const QDataType*>(kargs.q_ptr) +
                                  static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_q +
                                  batch_offset_q;
-        [[maybe_unused]] const KDataType* k_ptr =
-            reinterpret_cast<const KDataType*>(kargs.k_ptr) +
-            static_cast<long_index_t>(i_nhead / kargs.nhead_ratio_qk) * kargs.nhead_stride_k +
-            batch_offset_k;
-        [[maybe_unused]] const VDataType* v_ptr =
-            reinterpret_cast<const VDataType*>(kargs.v_ptr) +
-            static_cast<long_index_t>(i_nhead / kargs.nhead_ratio_qk) * kargs.nhead_stride_v +
-            batch_offset_v;
         ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
                            static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_o +
                            batch_offset_o;
