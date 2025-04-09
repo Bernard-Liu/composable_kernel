@@ -657,9 +657,15 @@ bool run(const ck_tile::ArgParser& arg_parser)
         p_drop > 0 ? get_lengths(true, shape_batch, nhead, shape_seqlen_q, max_seqlen_k)
                    : std::array<ck_tile::index_t, 4>{1, 1, 1, 1});
 
+    // FA-style page table
     ck_tile::HostTensor<int32_t> block_table_host(
         0 < page_block_size ? std::array<ck_tile::index_t, 2>{batch, max_num_page_blocks / batch}
                             : std::array<ck_tile::index_t, 2>{1, 1});
+
+    // SGLang-style page table
+    std::vector<int32_t> kv_indptr_host;
+    std::vector<int32_t> kv_page_indices_host;
+    std::vector<int32_t> kv_last_page_lens_host;
 
     ck_tile::HostTensor<int32_t> cache_batch_idx_host(use_cache_batch_idx
                                                           ? std::array<ck_tile::index_t, 1>{batch}
@@ -742,7 +748,22 @@ bool run(const ck_tile::ArgParser& arg_parser)
             }
         }
     }
+    // FA-style page table
     iota_shuffle(block_table_host.begin(), block_table_host.end(), 0);
+    // SGLang-style page table
+    if(0 < page_block_size)
+    {
+        kv_indptr_host.push_back(0);
+        for(auto seqlen_k : seqlen_ks)
+        {
+            const int32_t num_pages = ck_tile::integer_divide_ceil(seqlen_k, page_block_size);
+            kv_indptr_host.push_back(kv_indptr_host.back() + num_pages);
+            kv_last_page_lens_host.push_back(seqlen_k - (num_pages - 1) * page_block_size);
+        }
+
+        kv_page_indices_host.resize(max_num_page_blocks);
+        iota_shuffle(kv_page_indices_host.begin(), kv_page_indices_host.end(), 0);
+    }
     iota_shuffle(cache_batch_idx_host.begin(), cache_batch_idx_host.end(), 0);
 
     ck_tile::DeviceMem q_buf(q_host.get_element_space_size_in_bytes());
@@ -769,7 +790,12 @@ bool run(const ck_tile::ArgParser& arg_parser)
     ck_tile::DeviceMem drop_offset_buf(drop_prefs ? sizeof(uint64_t) : 0);
     ck_tile::DeviceMem randval_buf(randval_host.get_element_space_size_in_bytes());
     ck_tile::DeviceMem alibi_slope_buf(alibi_slope_host.get_element_space_size_in_bytes());
+    // FA-style page table
     ck_tile::DeviceMem block_table_buf(block_table_host.get_element_space_size_in_bytes());
+    // SGLang-style page table
+    ck_tile::DeviceMem kv_indptr_buf(kv_indptr_host.size() * sizeof(int32_t));
+    ck_tile::DeviceMem kv_page_indices_buf(kv_page_indices_host.size() * sizeof(int32_t));
+    ck_tile::DeviceMem kv_last_page_lens_buf(kv_last_page_lens_host.size() * sizeof(int32_t));
     ck_tile::DeviceMem cache_batch_idx_buf(cache_batch_idx_host.get_element_space_size_in_bytes());
 
     q_buf.ToDevice(q_host.data());
@@ -790,7 +816,12 @@ bool run(const ck_tile::ArgParser& arg_parser)
     drop_seed_buf.ToDevice(drop_prefs ? &drop_seed : nullptr);
     drop_offset_buf.ToDevice(drop_prefs ? &drop_offset : nullptr);
     alibi_slope_buf.ToDevice(alibi_slope_host.data());
+    // FA-style page table
     block_table_buf.ToDevice(block_table_host.data());
+    // SGLang-style page table
+    kv_indptr_buf.ToDevice(0 < page_block_size ? kv_indptr_host.data() : nullptr);
+    kv_page_indices_buf.ToDevice(0 < page_block_size ? kv_page_indices_host.data() : nullptr);
+    kv_last_page_lens_buf.ToDevice(0 < page_block_size ? kv_last_page_lens_host.data() : nullptr);
     cache_batch_idx_buf.ToDevice(cache_batch_idx_host.data());
 
     // clang-format off
