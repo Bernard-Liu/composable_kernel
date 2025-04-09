@@ -757,13 +757,14 @@ bool run(const ck_tile::ArgParser& arg_parser)
         for(auto seqlen_k : seqlen_ks)
         {
             const int32_t num_pages = ck_tile::integer_divide_ceil(seqlen_k, page_block_size);
+
+            std::copy_n(std::next(block_table_host.begin(), kv_indptr_host.back()),
+                        num_pages,
+                        std::back_inserter(kv_page_indices_host));
+
             kv_indptr_host.push_back(kv_indptr_host.back() + num_pages);
             kv_last_page_lens_host.push_back(seqlen_k - (num_pages - 1) * page_block_size);
         }
-
-        std::copy(block_table_host.begin(),
-                  block_table_host.end(),
-                  std::back_inserter(kv_page_indices_host));
     }
     iota_shuffle(cache_batch_idx_host.begin(), cache_batch_idx_host.end(), 0);
 
