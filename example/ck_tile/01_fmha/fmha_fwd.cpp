@@ -761,8 +761,9 @@ bool run(const ck_tile::ArgParser& arg_parser)
             kv_last_page_lens_host.push_back(seqlen_k - (num_pages - 1) * page_block_size);
         }
 
-        kv_page_indices_host.resize(max_num_page_blocks);
-        iota_shuffle(kv_page_indices_host.begin(), kv_page_indices_host.end(), 0);
+        std::copy(block_table_host.begin(),
+                  block_table_host.end(),
+                  std::back_inserter(kv_page_indices_host));
     }
     iota_shuffle(cache_batch_idx_host.begin(), cache_batch_idx_host.end(), 0);
 
