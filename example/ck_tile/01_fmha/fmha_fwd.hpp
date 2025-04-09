@@ -279,7 +279,6 @@ struct fmha_fwd_splitkv_args
     //                      or kargs.seqlen_k_ptr[b]
     const void* seqstart_q_ptr;
     const void* seqstart_k_ptr;
-    const void* seqlen_k_ptr;
 
     ck_tile::index_t seqlen_q;
     ck_tile::index_t seqlen_k;
@@ -605,7 +604,6 @@ auto fmha_fwd_splitkv_create_kargs_and_grids(fmha_fwd_splitkv_args args)
                                      args.batch,
                                      args.seqstart_q_ptr,
                                      args.seqstart_k_ptr,
-                                     args.seqlen_k_ptr,
                                      args.hdim_q,
                                      args.hdim_v,
                                      args.nhead_q,
@@ -647,7 +645,7 @@ auto fmha_fwd_splitkv_create_kargs_and_grids(fmha_fwd_splitkv_args args)
                                      args.batch,
                                      args.seqlen_q,
                                      args.seqlen_k,
-                                     args.seqlen_k_ptr,
+                                     args.seqstart_k_ptr,
                                      args.hdim_q,
                                      args.hdim_v,
                                      args.nhead_q,
