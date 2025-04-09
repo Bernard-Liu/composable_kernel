@@ -1080,7 +1080,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
                     args.drop_seed_offset = std::make_pair(drop_seed, drop_offset);
                 }
             }
-            else if(std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
+            else if constexpr(std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
             {
                 args.kv_indptr         = kv_indptr_buf.GetDeviceBuffer();
                 args.kv_page_indices   = kv_page_indices_buf.GetDeviceBuffer();
