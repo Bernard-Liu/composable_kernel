@@ -127,8 +127,9 @@ struct FmhaFwdPagedKVKernel
         // if this param is larger than 1, indicate MQA/GQA case
         ck_tile::index_t nhead_ratio_qk;
 
-        const int32_t* block_table_ptr;
-        ck_tile::index_t batch_stride_block_table;
+        const int32_t* kv_indptr;
+        const int32_t* kv_page_indices;
+        const int32_t* kv_last_page_lens;
         ck_tile::index_t page_block_size;
 
         float scale_s;
@@ -225,7 +226,6 @@ struct FmhaFwdPagedKVKernel
           std::conditional_t<kDoFp8StaticQuant, FmhaFwdFp8StaticQuantKargs, FmhaFwdEmptyKargs<3>>,
           std::conditional_t<kHasDropout, FmhaFwdBatchModeDropoutKargs, FmhaFwdEmptyKargs<4>>
     {
-        const int32_t* seqstart_k_ptr;
         ck_tile::index_t batch_stride_q;
         ck_tile::index_t batch_stride_k;
         ck_tile::index_t batch_stride_v;
@@ -245,7 +245,6 @@ struct FmhaFwdPagedKVKernel
           std::conditional_t<kHasDropout, FmhaFwdCommonDropoutKargs, FmhaFwdEmptyKargs<4>>
     {
         const int32_t* seqstart_q_ptr;
-        const int32_t* seqstart_k_ptr;
         ck_tile::index_t batch_stride_k;
         ck_tile::index_t batch_stride_v;
     };
@@ -262,13 +261,13 @@ struct FmhaFwdPagedKVKernel
               void* lse_ptr,
               void* o_ptr,
               ck_tile::index_t seqlen_q,
-              const void* seqstart_k_ptr,
               ck_tile::index_t hdim_q,
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head_q,
               ck_tile::index_t nhead_ratio_qk,
-              const void* block_table_ptr,
-              ck_tile::index_t batch_stride_block_table,
+              const void* kv_indptr,
+              const void* kv_page_indices,
+              const void* kv_last_page_lens,
               ck_tile::index_t page_block_size,
               float scale_s,
               float scale_p,
@@ -310,8 +309,9 @@ struct FmhaFwdPagedKVKernel
                      hdim_v,
                      num_head_q,
                      nhead_ratio_qk,
-                     reinterpret_cast<const int32_t*>(block_table_ptr),
-                     batch_stride_block_table,
+                     reinterpret_cast<const int32_t*>(kv_indptr),
+                     reinterpret_cast<const int32_t*>(kv_page_indices),
+                     reinterpret_cast<const int32_t*>(kv_last_page_lens),
                      page_block_size,
 #if CK_TILE_FMHA_FWD_FAST_EXP2
                      static_cast<float>(scale_s * ck_tile::log2e_v<>),
@@ -331,7 +331,6 @@ struct FmhaFwdPagedKVKernel
                     {},               // placeholder for lse
                     {},               // placeholder for fp8_static_quant args
                     {},               // placeholder for dropout
-                    reinterpret_cast<const int32_t*>(seqstart_k_ptr),
                     batch_stride_q,
                     batch_stride_k,
                     batch_stride_v,
@@ -391,13 +390,13 @@ struct FmhaFwdPagedKVKernel
               void* lse_ptr,
               void* o_ptr,
               const void* seqstart_q_ptr,
-              const void* seqstart_k_ptr,
               ck_tile::index_t hdim_q,
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head_q,
               ck_tile::index_t nhead_ratio_qk,
-              const void* block_table_ptr,
-              ck_tile::index_t batch_stride_block_table,
+              const void* kv_indptr,
+              const void* kv_page_indices,
+              const void* kv_last_page_lens,
               ck_tile::index_t page_block_size,
               float scale_s,
               float scale_p,
@@ -434,8 +433,9 @@ struct FmhaFwdPagedKVKernel
                      hdim_v,
                      num_head_q,
                      nhead_ratio_qk,
-                     reinterpret_cast<const int32_t*>(block_table_ptr),
-                     batch_stride_block_table,
+                     reinterpret_cast<const int32_t*>(kv_indptr),
+                     reinterpret_cast<const int32_t*>(kv_page_indices),
+                     reinterpret_cast<const int32_t*>(kv_last_page_lens),
                      page_block_size,
 #if CK_TILE_FMHA_FWD_FAST_EXP2
                      static_cast<float>(scale_s * ck_tile::log2e_v<>),
@@ -456,7 +456,6 @@ struct FmhaFwdPagedKVKernel
                     {},               // placeholder for fp8_static_quant args
                     {},               // placeholder for dropout
                     reinterpret_cast<const int32_t*>(seqstart_q_ptr),
-                    reinterpret_cast<const int32_t*>(seqstart_k_ptr),
                     batch_stride_k,
                     batch_stride_v};
 
@@ -556,6 +555,8 @@ struct FmhaFwdPagedKVKernel
         long_index_t batch_offset_lse     = 0;
         long_index_t batch_offset_o       = 0;
 
+        const int32_t num_page_blocks = kargs.kv_indptr[i_batch + 1] - kargs.kv_indptr[i_batch];
+        const int32_t last_page_len   = kargs.kv_last_page_lens[i_batch];
         if constexpr(kIsGroupMode)
         {
             // get starting offset for each batch
@@ -586,7 +587,7 @@ struct FmhaFwdPagedKVKernel
                 return;
             }
 
-            kargs.seqlen_k = kargs.seqstart_k_ptr[i_batch + 1] - kargs.seqstart_k_ptr[i_batch];
+            kargs.seqlen_k = (num_page_blocks - 1) * kargs.page_block_size + last_page_len;
         }
         else
         {
@@ -606,7 +607,7 @@ struct FmhaFwdPagedKVKernel
             }
             batch_offset_o = static_cast<long_index_t>(i_batch) * kargs.batch_stride_o;
 
-            kargs.seqlen_k = kargs.seqstart_k_ptr[i_batch + 1] - kargs.seqstart_k_ptr[i_batch];
+            kargs.seqlen_k = (num_page_blocks - 1) * kargs.page_block_size + last_page_len;
         }
 
         // for simplicity, batch stride we just modify the pointer
@@ -697,11 +698,7 @@ struct FmhaFwdPagedKVKernel
             }
         };
 
-        [[maybe_unused]] auto k_page_block_navigator = [&, i_batch_ = i_batch]() {
-            const auto* block_indices = reinterpret_cast<const int32_t*>(kargs.block_table_ptr) +
-                                        i_batch_ * kargs.batch_stride_block_table;
-            const index_t num_blocks = integer_divide_ceil(kargs.seqlen_k, kargs.page_block_size);
-
+        auto k_page_block_navigator = [&, i_batch_ = i_batch]() {
             const long_index_t fixed_offset =
                 static_cast<long_index_t>(i_nhead_k) * kargs.nhead_stride_k;
 
@@ -709,18 +706,14 @@ struct FmhaFwdPagedKVKernel
                 kargs.k_ptr,
                 kargs.batch_stride_k, // kcache page-block stride/size
                 fixed_offset,
-                block_indices,
-                num_blocks,
+                kargs.kv_page_indices,
+                num_page_blocks,
                 kargs.page_block_size,
                 make_k_dram(nullptr, kargs.page_block_size),
-                make_k_dram(nullptr, kargs.seqlen_k - (num_blocks - 1) * kargs.page_block_size));
+                make_k_dram(nullptr, last_page_len));
         }();
 
-        [[maybe_unused]] auto v_page_block_navigator = [&, i_batch_ = i_batch]() {
-            const auto* block_indices = reinterpret_cast<const int32_t*>(kargs.block_table_ptr) +
-                                        i_batch_ * kargs.batch_stride_block_table;
-            const index_t num_blocks = integer_divide_ceil(kargs.seqlen_k, kargs.page_block_size);
-
+        auto v_page_block_navigator = [&, i_batch_ = i_batch]() {
             const long_index_t fixed_offset =
                 static_cast<long_index_t>(i_nhead_k) * kargs.nhead_stride_v;
 
@@ -728,11 +721,11 @@ struct FmhaFwdPagedKVKernel
                 kargs.v_ptr,
                 kargs.batch_stride_v, // vcache page-block stride/size
                 fixed_offset,
-                block_indices,
-                num_blocks,
+                kargs.kv_page_indices,
+                num_page_blocks,
                 kargs.page_block_size,
                 make_v_dram(nullptr, kargs.page_block_size),
-                make_v_dram(nullptr, kargs.seqlen_k - (num_blocks - 1) * kargs.page_block_size));
+                make_v_dram(nullptr, last_page_len));
         }();
 
         auto q_dram_window = make_tile_window(

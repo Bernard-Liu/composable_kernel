@@ -187,7 +187,6 @@ struct fmha_fwd_pagedkv_args
     void* o_ptr;
 
     const void* seqstart_q_ptr;
-    const void* seqstart_k_ptr;
 
     ck_tile::index_t seqlen_q;
     ck_tile::index_t seqlen_k;
@@ -198,9 +197,11 @@ struct fmha_fwd_pagedkv_args
     ck_tile::index_t nhead_q;
     ck_tile::index_t nhead_k;
 
-    void* block_table_ptr;
-    ck_tile::index_t batch_stride_block_table; // only used if 'block_table_ptr' is not nullptr
-    ck_tile::index_t page_block_size;          // only used if 'block_table_ptr' is not nullptr
+    // SGLang-style page table
+    void* kv_indptr;
+    void* kv_page_indices;
+    void* kv_last_page_lens;
+    ck_tile::index_t page_block_size;
 
     float scale_s;
     float scale_p;
@@ -492,13 +493,13 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
                                          args.lse_ptr,
                                          args.o_ptr,
                                          args.seqstart_q_ptr,
-                                         args.seqstart_k_ptr,
                                          args.hdim_q,
                                          args.hdim_v,
                                          args.nhead_q,
                                          args.nhead_q / args.nhead_k,
-                                         args.block_table_ptr,
-                                         args.batch_stride_block_table,
+                                         args.kv_indptr,
+                                         args.kv_page_indices,
+                                         args.kv_last_page_lens,
                                          args.page_block_size,
                                          args.scale_s,
                                          args.scale_p,
@@ -535,13 +536,13 @@ auto fmha_fwd_pagedkv_create_kargs_and_grids(fmha_fwd_pagedkv_args args)
                                          args.lse_ptr,
                                          args.o_ptr,
                                          args.seqlen_q,
-                                         args.seqstart_k_ptr,
                                          args.hdim_q,
                                          args.hdim_v,
                                          args.nhead_q,
                                          args.nhead_q / args.nhead_k,
-                                         args.block_table_ptr,
-                                         args.batch_stride_block_table,
+                                         args.kv_indptr,
+                                         args.kv_page_indices,
+                                         args.kv_last_page_lens,
                                          args.page_block_size,
                                          args.scale_s,
                                          args.scale_p,

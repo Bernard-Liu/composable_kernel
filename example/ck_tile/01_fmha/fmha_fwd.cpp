@@ -1028,12 +1028,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
             args.seqstart_q_ptr =
                 (mode == mode_enum::group ? seqstart_q.GetDeviceBuffer() : nullptr);
-
-            if constexpr(std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
-            {
-                args.seqstart_k_ptr = seqstart_k.GetDeviceBuffer();
-            }
-            else
+            if constexpr(!std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
             {
                 args.seqstart_k_ptr =
                     (mode == mode_enum::group ? seqstart_k.GetDeviceBuffer() : nullptr);
@@ -1086,10 +1081,10 @@ bool run(const ck_tile::ArgParser& arg_parser)
             }
             else if(std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
             {
-                args.block_table_ptr =
-                    (0 < page_block_size ? block_table_buf.GetDeviceBuffer() : nullptr);
-                args.batch_stride_block_table = batch_stride_block_table;
-                args.page_block_size          = page_block_size;
+                args.kv_indptr         = kv_indptr_buf.GetDeviceBuffer();
+                args.kv_page_indices   = kv_page_indices_buf.GetDeviceBuffer();
+                args.kv_last_page_lens = kv_last_page_lens_buf.GetDeviceBuffer();
+                args.page_block_size   = page_block_size;
 
                 args.rand_val_ptr = randval_buf.GetDeviceBuffer();
 
