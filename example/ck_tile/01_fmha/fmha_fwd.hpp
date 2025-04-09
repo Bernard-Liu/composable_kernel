@@ -249,11 +249,11 @@ struct fmha_fwd_splitkv_args
     void* lse_ptr;
     void* o_ptr;
 
-    void* block_table_ptr;
-    ck_tile::index_t batch_stride_block_table; // only used if 'block_table_ptr' is not nullptr
-    ck_tile::index_t page_block_size;          // only used if 'block_table_ptr' is not nullptr
-    bool is_gappy; // differentiate seqstart_k_ptr usage. only used if 'block_table_ptr' is not
-                   // nullptr.
+    // SGLang-style page table
+    void* kv_indptr;
+    void* kv_page_indices;
+    void* kv_last_page_lens;
+    ck_tile::index_t page_block_size;
 
     const void* cache_batch_idx;
 
@@ -609,10 +609,10 @@ auto fmha_fwd_splitkv_create_kargs_and_grids(fmha_fwd_splitkv_args args)
                                      args.nhead_q,
                                      args.nhead_q / args.nhead_k,
                                      args.num_splits,
-                                     args.block_table_ptr,
-                                     args.batch_stride_block_table,
+                                     args.kv_indptr,
+                                     args.kv_page_indices,
+                                     args.kv_last_page_lens,
                                      args.page_block_size,
-                                     args.is_gappy,
                                      args.scale_s,
                                      args.scale_p,
                                      args.stride_q,
@@ -645,14 +645,14 @@ auto fmha_fwd_splitkv_create_kargs_and_grids(fmha_fwd_splitkv_args args)
                                      args.batch,
                                      args.seqlen_q,
                                      args.seqlen_k,
-                                     args.seqstart_k_ptr,
                                      args.hdim_q,
                                      args.hdim_v,
                                      args.nhead_q,
                                      args.nhead_q / args.nhead_k,
                                      args.num_splits,
-                                     args.block_table_ptr,
-                                     args.batch_stride_block_table,
+                                     args.kv_indptr,
+                                     args.kv_page_indices,
+                                     args.kv_last_page_lens,
                                      args.page_block_size,
                                      args.cache_batch_idx,
                                      args.scale_s,

@@ -149,7 +149,6 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                FmhaMask mask,
                PositionEncoding position_encoding,
                float scale_s,
-               index_t kv_l2p_offset, // logical-to-physical offset of seqlen_k coordinate
                void* smem_ptr) const
     {
         static_assert(
@@ -245,8 +244,8 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
             }
         }
 
-        const index_t physical_seqlen_k_start = logical_seqlen_k_start + kv_l2p_offset;
-        const index_t physical_seqlen_k_end   = logical_seqlen_k_end + kv_l2p_offset;
+        const index_t physical_seqlen_k_start = logical_seqlen_k_start;
+        const index_t physical_seqlen_k_end   = logical_seqlen_k_end;
         // make sure the first tile is completely located in page-block (page-block size should be
         // divisible by kN0)
         // relationship between each *_start variables: aligned_physical_seqlen_k_start <=
@@ -394,7 +393,7 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
 
                         s_acc(i_j_idx) *= scale_s;
                         // position_encoding accept only logical coordinates, do conversion here
-                        position_encoding.update(s_acc(i_j_idx), row, col - kv_l2p_offset);
+                        position_encoding.update(s_acc(i_j_idx), row, col);
                     });
                 });
             }
@@ -436,7 +435,7 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                     i_page_block_k, k_dram_block_window.get_window_origin());
                 // mask accept only logical coordinates, do conversion here
                 bool need_perpixel_check = mask.IsEdgeTile(q_origin.at(number<0>{}),
-                                                           k_origin.at(number<0>{}) - kv_l2p_offset,
+                                                           k_origin.at(number<0>{}),
                                                            number<kM0>{},
                                                            number<kN0>{});
                 if(need_perpixel_check)
@@ -445,7 +444,7 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                         s_acc, -numeric<SMPLComputeDataType>::infinity(), [&](auto tile_idx) {
                             const auto row = q_origin.at(number<0>{}) + tile_idx.at(number<0>{});
                             const auto col = k_origin.at(number<0>{}) + tile_idx.at(number<1>{});
-                            return mask.IsOutOfBound(row, col - kv_l2p_offset);
+                            return mask.IsOutOfBound(row, col);
                         });
                 }
             }
@@ -676,7 +675,6 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                FmhaMask mask,
                PositionEncoding position_encoding,
                float scale_s,
-               index_t kv_l2p_offset, // logical-to-physical offset of seqlen_k coordinate
                void* smem_ptr) const
     {
         return operator()(q_dram_block_window_tmp,
@@ -699,7 +697,6 @@ struct BlockFmhaFwdSplitKVPipelineQRKSVS
                           mask,
                           position_encoding,
                           scale_s,
-                          kv_l2p_offset,
                           smem_ptr);
     }
 };
