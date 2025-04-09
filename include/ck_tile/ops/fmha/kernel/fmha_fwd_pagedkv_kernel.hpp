@@ -699,6 +699,7 @@ struct FmhaFwdPagedKVKernel
         };
 
         auto k_page_block_navigator = [&, i_batch_ = i_batch]() {
+            const auto* block_indices = kargs.kv_page_indices + kargs.kv_indptr[i_batch_];
             const long_index_t fixed_offset =
                 static_cast<long_index_t>(i_nhead_k) * kargs.nhead_stride_k;
 
@@ -706,7 +707,7 @@ struct FmhaFwdPagedKVKernel
                 kargs.k_ptr,
                 kargs.batch_stride_k, // kcache page-block stride/size
                 fixed_offset,
-                kargs.kv_page_indices,
+                block_indices,
                 num_page_blocks,
                 kargs.page_block_size,
                 make_k_dram(nullptr, kargs.page_block_size),
@@ -714,6 +715,7 @@ struct FmhaFwdPagedKVKernel
         }();
 
         auto v_page_block_navigator = [&, i_batch_ = i_batch]() {
+            const auto* block_indices = kargs.kv_page_indices + kargs.kv_indptr[i_batch_];
             const long_index_t fixed_offset =
                 static_cast<long_index_t>(i_nhead_k) * kargs.nhead_stride_v;
 
@@ -721,7 +723,7 @@ struct FmhaFwdPagedKVKernel
                 kargs.v_ptr,
                 kargs.batch_stride_v, // vcache page-block stride/size
                 fixed_offset,
-                kargs.kv_page_indices,
+                block_indices,
                 num_page_blocks,
                 kargs.page_block_size,
                 make_v_dram(nullptr, kargs.page_block_size),
