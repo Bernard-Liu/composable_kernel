@@ -37,13 +37,11 @@ K0_MAX_SUBMAX_MAP = {
     256: 256
 }
 
-FMHA_FWD_SPLITKV_PIPELINE_MAP = {
-    "qr" : "ck_tile::BlockFmhaFwdSplitKVPipelineQRKSVS",
-    "qr_nwarp_sshuffle" : "ck_tile::BlockFmhaFwdSplitKVPipelineNWarpSShuffleQRKSVS",
-    "qr_async" : "ck_tile::BlockFmhaFwdSplitKVPipelineQRKSVSAsync",
+FMHA_BATCH_DECODE_PIPELINE_MAP = {
+    "qr" : "ck_tile::BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS",
 }
 
-FMHA_FWD_SPLITKV_KERNEL_BODY="""
+FMHA_BATCH_DECODE_KERNEL_BODY="""
 using fmha_dtype_{F_idx} = {F_dtype};
 using fmha_mask_{F_idx} = {F_mask};
 
@@ -99,12 +97,12 @@ using fmha_epilogue =
                                            false, false>>;
 
 using fmha_kernel =
-    ck_tile::FmhaFwdSplitKVKernel<fmha_pipeline, fmha_epilogue>;
+    ck_tile::FmhaBatchDecodeWithPagedKVCacheKernel<fmha_pipeline, fmha_epilogue>;
 
-static void run(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a)
+static void run(const ck_tile::stream_config& s, fmha_batch_decode_args a)
 {{
     using k_ = fmha_kernel;
-    auto [kargs, grids] = fmha_fwd_splitkv_create_kargs_and_grids<k_>(a);
+    auto [kargs, grids] = fmha_batch_decode_create_kargs_and_grids<k_>(a);
     constexpr dim3 blocks             = k_::BlockSize();
     constexpr ck_tile::index_t kBlockPerCu = k_::kBlockPerCu;
     ck_tile::make_kernel<blocks.x, kBlockPerCu>(k_{{}}, grids, blocks, 0, kargs)(ck_tile::stream_config{{s.stream_id_}});
@@ -112,7 +110,7 @@ static void run(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a)
 }};
 }}
 
-using trait_{F_idx} = fmha_fwd_splitkv_traits_<{F_hdim}, {F_dtype}, {F_mode}, {F_bm0}, {F_bn0}, {F_bk0}, {F_bn1}, {F_bk1}, {F_bk0max}, {F_vlayout},
+using trait_{F_idx} = fmha_batch_decode_traits_<{F_hdim}, {F_dtype}, {F_mode}, {F_bm0}, {F_bn0}, {F_bk0}, {F_bn1}, {F_bk1}, {F_bk0max}, {F_vlayout},
                         {F_pipeline_enum}, fmha_mask_{F_idx}, {F_bias}, {F_lse}, {F_squant}, {F_pagedkv}, {F_spad}, {F_skpad}, {F_dpad},
                         {F_dvpad}>;
 
@@ -123,7 +121,7 @@ using trait_{F_idx} = fmha_fwd_splitkv_traits_<{F_hdim}, {F_dtype}, {F_mode}, {F
 
 namespace {{
 template <bool kHasUnevenSplits>
-void run_instance(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a) {{
+void run_instance(const ck_tile::stream_config& s, fmha_batch_decode_args a) {{
     if constexpr ({F_hdim} == 128 && {F_bias} == ck_tile::BlockAttentionBiasEnum::NO_BIAS
                   && (std::is_same_v<{F_mask}, ck_tile::SimplifiedGenericAttentionMask<false>>
                       || std::is_same_v<{F_mask}, FmhaMasks::NoMask>)) {{
@@ -141,7 +139,7 @@ void run_instance(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a) {{
 #pragma clang diagnostic pop
 
 template<>
-void fmha_fwd_splitkv_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a)
+void fmha_batch_decode_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, fmha_batch_decode_args a)
 {{
     if constexpr({F_mode} == false) {{ // batch mode
         // we don't check every seqlen_k values for kvcache
@@ -159,7 +157,7 @@ void fmha_fwd_splitkv_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, f
 }}
 
 template<>
-std::string fmha_fwd_splitkv_get_name_<trait_{F_idx}>()
+std::string fmha_batch_decode_get_name_<trait_{F_idx}>()
 {{
     using k_ = instance<true>::fmha_kernel; /// FIXME: choose real kernel type
     return k_::GetName();
@@ -201,7 +199,7 @@ using fmha_epilogue =
 using fmha_kernel =
     ck_tile::FmhaFwdSplitKVCombineKernel<fmha_pipeline, fmha_epilogue>;
 
-static void run(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a)
+static void run(const ck_tile::stream_config& s, fmha_batch_decode_args a)
 {{
     using k_ = fmha_kernel;
     auto [kargs, grids] = fmha_fwd_splitkv_combine_create_kargs_and_grids<k_>(a);
@@ -218,7 +216,7 @@ using trait_{F_idx} = fmha_fwd_splitkv_combine_traits_<{F_hdim}, {F_dtype}, {F_m
 #include <iostream>
 
 template<>
-void fmha_fwd_splitkv_combine_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a)
+void fmha_fwd_splitkv_combine_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, fmha_batch_decode_args a)
 {{
     if (a.num_splits <= 8) {{
         instance<3>::run(s, a);
@@ -241,35 +239,35 @@ std::string fmha_fwd_splitkv_combine_get_name_<trait_{F_idx}>()
 }}
 """
 
-FMHA_FWD_SPLITKV_API_FILENAME="fmha_fwd_splitkv_api.cpp"
-FMHA_FWD_SPLITKV_API="""
+FMHA_BATCH_DECODE_API_FILENAME="fmha_batch_decode_api.cpp"
+FMHA_BATCH_DECODE_API="""
 #include <iostream>
 
-template<typename fmha_fwd_splitkv_traits_, typename fmha_fwd_splitkv_combine_traits_>
-float fmha_fwd_splitkv_(const ck_tile::stream_config& s, fmha_fwd_splitkv_args a)
+template<typename fmha_batch_decode_traits_, typename fmha_fwd_splitkv_combine_traits_>
+float fmha_batch_decode_(const ck_tile::stream_config& s, fmha_batch_decode_args a)
 {{
     if(s.log_level_ > 0)
     std::cout
-    << ", " << fmha_fwd_splitkv_get_name_<fmha_fwd_splitkv_traits_>()
+    << ", " << fmha_batch_decode_get_name_<fmha_batch_decode_traits_>()
     << ", " << fmha_fwd_splitkv_combine_get_name_<fmha_fwd_splitkv_combine_traits_>()
     << std::flush;
 
     return ck_tile::launch_kernel(s,
-        [=](const ck_tile::stream_config& s_){{ fmha_fwd_splitkv_oneshot_<fmha_fwd_splitkv_traits_>(s_, a); }},
+        [=](const ck_tile::stream_config& s_){{ fmha_batch_decode_oneshot_<fmha_batch_decode_traits_>(s_, a); }},
         [=](const ck_tile::stream_config& s_){{ fmha_fwd_splitkv_combine_oneshot_<fmha_fwd_splitkv_combine_traits_>(s_, a); }}
     );
 }}
 
-float fmha_fwd_splitkv(fmha_fwd_splitkv_traits t, fmha_fwd_splitkv_args a, const ck_tile::stream_config& s){{
+float fmha_batch_decode(fmha_batch_decode_traits t, fmha_batch_decode_args a, const ck_tile::stream_config& s){{
     float r = -1;
 {F_dispatch}
     return r;
 }}
 """
 
-FMHA_FWD_SPLITKV_API_INNER_DISPATCH="""            {F_if}((t.is_group_mode == {F_mode}) && (t.is_v_rowmajor == {F_vlayout}) && ({F_mask_check}) && (t.bias_type == {F_bias_check}) && (t.do_fp8_static_quant == {F_squant}) &&
+FMHA_BATCH_DECODE_API_INNER_DISPATCH="""            {F_if}((t.is_group_mode == {F_mode}) && (t.is_v_rowmajor == {F_vlayout}) && ({F_mask_check}) && (t.bias_type == {F_bias_check}) && (t.do_fp8_static_quant == {F_squant}) &&
                         ((a.kv_indptr != nullptr) == {F_pagedkv}) && ({F_scheck}) && ({F_skcheck}) && ({F_dcheck}) && ({F_dvcheck})) {{
-                using traits_ = fmha_fwd_splitkv_traits_<{F_hdim}, {F_dtype}, {F_mode}, {F_bm0}, {F_bn0}, {F_bk0}, {F_bn1}, {F_bk1}, {F_bk0max}, {F_vlayout}, {F_pipeline_enum}, {F_mask}, {F_bias}, true, {F_squant}, {F_pagedkv}, {F_spad}, {F_skpad}, {F_dpad}, {F_dvpad}>;
+                using traits_ = fmha_batch_decode_traits_<{F_hdim}, {F_dtype}, {F_mode}, {F_bm0}, {F_bn0}, {F_bk0}, {F_bn1}, {F_bk1}, {F_bk0max}, {F_vlayout}, {F_pipeline_enum}, {F_mask}, {F_bias}, true, {F_squant}, {F_pagedkv}, {F_spad}, {F_skpad}, {F_dpad}, {F_dvpad}>;
 
                 // get combine kernel tile sizes
                 using OaccDataType = typename FmhaFwdTypeConfig<{F_dtype}>::OaccDataType;
@@ -285,12 +283,12 @@ FMHA_FWD_SPLITKV_API_INNER_DISPATCH="""            {F_if}((t.is_group_mode == {F
                     }} else {{
                         using traits2_ = fmha_fwd_splitkv_combine_traits_<{F_hdim}, {F_dtype}, {F_mode}, /*F_bn1=*/32, true, {F_squant}, {F_spad}, {F_dvpad}>;
 
-                        return fmha_fwd_splitkv_<traits_, traits2_>(s, a);
+                        return fmha_batch_decode_<traits_, traits2_>(s, a);
                     }}
                 }} else {{
                     using traits2_ = fmha_fwd_splitkv_combine_traits_<{F_hdim}, {F_dtype}, {F_mode}, /*F_bn1=*/32, false, {F_squant}, {F_spad}, {F_dvpad}>;
 
-                    return fmha_fwd_splitkv_<traits_, traits2_>(s, a);
+                    return fmha_batch_decode_<traits_, traits2_>(s, a);
                 }}
             }}
 """
@@ -474,7 +472,7 @@ class FmhaFwdSplitKVApiPool:
                 inners=str()
                 for k, trait in enumerate(traits):
                     if_k = 'if' if k == 0 else 'else if'
-                    inners = inners + FMHA_FWD_SPLITKV_API_INNER_DISPATCH.format(F_if=if_k, F_mode=MODE_MAP[trait.mode], F_vlayout=LAYOUT_MAP[trait.vlayout],
+                    inners = inners + FMHA_BATCH_DECODE_API_INNER_DISPATCH.format(F_if=if_k, F_mode=MODE_MAP[trait.mode], F_vlayout=LAYOUT_MAP[trait.vlayout],
                                    F_pipeline_enum=PIPELINE_ENUM_MAP[trait.pipeline_tag], F_mask=get_mask_map(self.mask_impl)[trait.mask],
                                    F_mask_check=get_mask_check_map(self.mask_impl)[trait.mask], F_bias_check=BIAS_CHECK_MAP[trait.bias], F_bias=BIAS_MAP[trait.bias],
                                    F_lse=BOOL_MAP[trait.lse], F_squant=BOOL_MAP[trait.squant], F_pagedkv=BOOL_MAP[trait.pagedkv],
@@ -489,7 +487,7 @@ class FmhaFwdSplitKVApiPool:
         if not per_dtypes:
             # empty string we add some ignore to suppress warning in api
             per_dtypes += '    (void)t ; (void)s ; (void)a;'
-        return FMHA_FWD_KERNEL_HEADER + FMHA_FWD_SPLITKV_API.format(F_dispatch = per_dtypes)
+        return FMHA_FWD_KERNEL_HEADER + FMHA_BATCH_DECODE_API.format(F_dispatch = per_dtypes)
 
 @dataclass
 class FmhaFwdSplitKVCombineTileSize:
@@ -514,7 +512,7 @@ class FmhaFwdSplitKVKernel:
     def template(self) -> str:
         kernel_body = str()
         return FMHA_FWD_KERNEL_HEADER + \
-            FMHA_FWD_SPLITKV_KERNEL_BODY.format(
+            FMHA_BATCH_DECODE_KERNEL_BODY.format(
                 F_idx           = self.F_idx,
                 F_hdim          = self.F_hdim,
                 F_dtype         = FWD_DTYPE_MAP[self.F_dtype],
@@ -549,12 +547,12 @@ class FmhaFwdSplitKVKernel:
                 F_pipeline_enum = PIPELINE_ENUM_MAP[self.F_pipeline.tag],
                 F_mask          = get_mask_map(self.mask_impl)[self.F_pipeline.F_mask],
                 F_mode          = MODE_MAP[self.F_mode],
-                F_pipeline      = FMHA_FWD_SPLITKV_PIPELINE_MAP[self.F_pipeline.tag])
+                F_pipeline      = FMHA_BATCH_DECODE_PIPELINE_MAP[self.F_pipeline.tag])
 
     @property
     def name(self) -> str:
         # TODO: we don't encode idx here
-        return f"fmha_fwd_splitkv_d{self.F_hdim}_{self.F_dtype}_{self.F_mode}_" + \
+        return f"fmha_batch_decode_d{self.F_hdim}_{self.F_dtype}_{self.F_mode}_" + \
                 self.F_tile.name + '_' + self.F_pipeline.name
 
     @property
@@ -657,7 +655,7 @@ def get_fmha_fwd_splitkv_combine_tile_dict_from_dtype(dtype : str) -> Optional[d
     else:
         return None
 
-def get_fwd_splitkv_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> Tuple[FmhaFwdSplitKVApiPool, List[FmhaFwdSplitKVKernel]]:
+def get_batch_decode_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> Tuple[FmhaFwdSplitKVApiPool, List[FmhaFwdSplitKVKernel]]:
     Pipeline = FmhaFwdSplitKVPipeline
     Kernel = FmhaFwdSplitKVKernel
 
@@ -675,15 +673,15 @@ def get_fwd_splitkv_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> 
                 # TODO: use async pipeline when compiler is more stable
                 if hdim == 256 or hdim in [32, 64, 128]:         ### [32, 64, 96, 128]:
                 # if True:
-                    pipelines.append(Pipeline('qr_nwarp_sshuffle', 'row', 'f', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
-                    pipelines.append(Pipeline('qr_nwarp_sshuffle', 'col', 'f', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
+                    pipelines.append(Pipeline('qr', 'row', 'f', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
+                    pipelines.append(Pipeline('qr', 'col', 'f', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
 
                     # Enable following pipelines for better performance
-                    pipelines.append(Pipeline('qr_nwarp_sshuffle', 'row', 't', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
-                    pipelines.append(Pipeline('qr_nwarp_sshuffle', 'col', 't', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
+                    pipelines.append(Pipeline('qr', 'row', 't', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
+                    pipelines.append(Pipeline('qr', 'col', 't', 't', 'f', 'f', bias, 't', squant, pagedkv, mask))
 
-                    pipelines.append(Pipeline('qr_nwarp_sshuffle', 'row', 't', 't', 't', 't', bias, 't', squant, pagedkv, mask))
-                    pipelines.append(Pipeline('qr_nwarp_sshuffle', 'col', 't', 't', 't', 't', bias, 't', squant, pagedkv, mask))
+                    pipelines.append(Pipeline('qr', 'row', 't', 't', 't', 't', bias, 't', squant, pagedkv, mask))
+                    pipelines.append(Pipeline('qr', 'col', 't', 't', 't', 't', bias, 't', squant, pagedkv, mask))
                 else:
                     pipelines.append(Pipeline('qr_async', 'row', 't', 'f', 't', 't', bias, 't', squant, pagedkv, mask))
                     pipelines.append(Pipeline('qr_async', 'row', 't', 't', 't', 't', bias, 't', squant, pagedkv, mask))
@@ -821,8 +819,8 @@ def get_fwd_splitkv_combine_blobs(kernel_filter : Optional[str], receipt) -> Lis
 def write_single_kernel(kernel: Union[FmhaFwdSplitKVKernel, FmhaFwdSplitKVCombineKernel], autogen_dir: Path) -> None:
     (autogen_dir / kernel.filename).write_text(kernel.template)
 
-def write_fwd_splitkv_api(api_pool : FmhaFwdSplitKVApiPool, autogen_dir: Path) -> None:
-    file_path = autogen_dir / FMHA_FWD_SPLITKV_API_FILENAME
+def write_batch_decode_api(api_pool : FmhaFwdSplitKVApiPool, autogen_dir: Path) -> None:
+    file_path = autogen_dir / FMHA_BATCH_DECODE_API_FILENAME
     file_path.write_text(api_pool.api)
 
 def write_blobs(output_dir : Path, filter_list : str, receipt, mask_impl) -> None:
@@ -832,10 +830,10 @@ def write_blobs(output_dir : Path, filter_list : str, receipt, mask_impl) -> Non
     kernels = get_fwd_splitkv_combine_blobs(filter_list[0], receipt)
     for kernel in kernels:
         write_single_kernel(kernel, output_dir)
-    api_pool, kernels = get_fwd_splitkv_blobs(filter_list[1], receipt, mask_impl)
+    api_pool, kernels = get_batch_decode_blobs(filter_list[1], receipt, mask_impl)
     for kernel in kernels:
         write_single_kernel(kernel, output_dir)
-    write_fwd_splitkv_api(api_pool, output_dir)
+    write_batch_decode_api(api_pool, output_dir)
 
 def list_blobs(file_path : Path, filter_list : str, receipt, mask_impl) -> None:
     filter_list = filter_list.split('@')
@@ -845,7 +843,7 @@ def list_blobs(file_path : Path, filter_list : str, receipt, mask_impl) -> None:
         kernels = get_fwd_splitkv_combine_blobs(filter_list[0], receipt)
         for kernel in kernels:
             f.write(str(file_path.parent / GEN_DIR / kernel.filename) + "\n")
-        _, kernels = get_fwd_splitkv_blobs(filter_list[1], receipt, mask_impl)
+        _, kernels = get_batch_decode_blobs(filter_list[1], receipt, mask_impl)
         for kernel in kernels:
             f.write(str(file_path.parent / GEN_DIR / kernel.filename) + "\n")
-        f.write(str(file_path.parent / GEN_DIR / FMHA_FWD_SPLITKV_API_FILENAME) + "\n")
+        f.write(str(file_path.parent / GEN_DIR / FMHA_BATCH_DECODE_API_FILENAME) + "\n")

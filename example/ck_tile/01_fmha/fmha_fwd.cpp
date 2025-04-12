@@ -458,7 +458,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
     const bool is_rotary_interleaved = arg_parser.get_bool("rotary_interleaved");
 
     ck_tile::index_t num_splits = arg_parser.get_int("num_splits");
-#if !CK_TILE_FMHA_FWD_SPLITKV_API
+#if !CK_TILE_FMHA_BATCH_DECODE_API
     if(num_splits != 1)
     {
         std::cerr << "split-kv is not supported. ignoring the 'num_splits' option" << std::endl;
@@ -564,7 +564,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
         std::cerr << "num_splits greater than 128 is not supported" << std::endl;
         return false;
     }
-#if CK_TILE_FMHA_FWD_SPLITKV_API
+#if CK_TILE_FMHA_BATCH_DECODE_API
     if(0 < p_drop && 1 < num_splits)
     {
         std::cerr << "dropout is not supoprted by split-kv kernels. ignoring the 'p_drop' option"
@@ -852,7 +852,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
                   << (is_rotary_interleaved ? "inter" : "half") << ")";
     }
 #endif
-#if CK_TILE_FMHA_FWD_SPLITKV_API
+#if CK_TILE_FMHA_BATCH_DECODE_API
     if(1 < num_splits)
     {
         std::cout << ", num_splits:" << num_splits;
@@ -1020,7 +1020,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             args.batch_stride_knew = batch_stride_knew;
             args.batch_stride_vnew = batch_stride_vnew;
         }
-        else // fmha_fwd_args or fmha_batch_prefill_args or fmha_fwd_splitkv_args
+        else // fmha_fwd_args or fmha_batch_prefill_args or fmha_batch_decode_args
         {
             args.bias_ptr = bias.type == bias_enum::alibi ? alibi_slope_buf.GetDeviceBuffer()
                                                           : bias_buf.GetDeviceBuffer();
@@ -1100,7 +1100,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
                 args.s_randval        = s_randval;
                 args.drop_seed_offset = std::make_pair(drop_seed, drop_offset);
             }
-            else if constexpr(std::is_same_v<fmha_fwd_splitkv_args, std::decay_t<decltype(args)>>)
+            else if constexpr(std::is_same_v<fmha_batch_decode_args, std::decay_t<decltype(args)>>)
             {
                 args.lse_acc_ptr = lse_acc_buf.GetDeviceBuffer();
                 args.o_acc_ptr   = o_acc_buf.GetDeviceBuffer();
@@ -1145,16 +1145,16 @@ bool run(const ck_tile::ArgParser& arg_parser)
     }();
 
     const float fwd_ave_time = [&] {
-#if CK_TILE_FMHA_FWD_SPLITKV_API
+#if CK_TILE_FMHA_BATCH_DECODE_API
         if(1 < num_splits)
         {
-            fmha_fwd_splitkv_traits fmha_splitkv_traits;
-            init_traits(fmha_splitkv_traits);
+            fmha_batch_decode_traits fmha_decode_traits;
+            init_traits(fmha_decode_traits);
 
-            fmha_fwd_splitkv_args fmha_splitkv_args;
-            init_args(fmha_splitkv_args);
+            fmha_batch_decode_args fmha_decode_args;
+            init_args(fmha_decode_args);
 
-            return fmha_fwd_splitkv(fmha_splitkv_traits, fmha_splitkv_args, stream_config);
+            return fmha_batch_decode(fmha_decode_traits, fmha_decode_args, stream_config);
         }
 #endif
 #if CK_TILE_FMHA_BATCH_PREFILL_API

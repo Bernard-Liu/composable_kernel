@@ -238,7 +238,7 @@ struct fmha_batch_prefill_args
     std::pair<uint64_t, uint64_t> drop_seed_offset;
 };
 
-struct fmha_fwd_splitkv_args
+struct fmha_batch_decode_args
 {
     const void* q_ptr;
     const void* k_ptr;
@@ -588,7 +588,7 @@ auto fmha_batch_prefill_create_kargs_and_grids(fmha_batch_prefill_args args)
 }
 
 template <typename Kernel>
-auto fmha_fwd_splitkv_create_kargs_and_grids(fmha_fwd_splitkv_args args)
+auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
 {
     assert(args.nhead_q % args.nhead_k == 0);
     auto kargs = [&] {
@@ -689,7 +689,7 @@ auto fmha_fwd_splitkv_create_kargs_and_grids(fmha_fwd_splitkv_args args)
 }
 
 template <typename Kernel>
-auto fmha_fwd_splitkv_combine_create_kargs_and_grids(fmha_fwd_splitkv_args args)
+auto fmha_fwd_splitkv_combine_create_kargs_and_grids(fmha_batch_decode_args args)
 {
     assert(args.nhead_q % args.nhead_k == 0);
     auto kargs = [&] {
@@ -906,7 +906,7 @@ template <ck_tile::index_t HDim_,
           bool kPadSK_,
           bool kPadD_,
           bool kPadDv_>
-struct fmha_fwd_splitkv_traits_
+struct fmha_batch_decode_traits_
 {
     static constexpr ck_tile::index_t HDim           = HDim_;
     using DataType                                   = ck_tile::remove_cvref_t<DataType_>;
@@ -931,10 +931,10 @@ struct fmha_fwd_splitkv_traits_
 };
 
 template <typename Traits_>
-void fmha_fwd_splitkv_oneshot_(const ck_tile::stream_config&, fmha_fwd_splitkv_args);
+void fmha_batch_decode_oneshot_(const ck_tile::stream_config&, fmha_batch_decode_args);
 
 template <typename Traits_>
-std::string fmha_fwd_splitkv_get_name_();
+std::string fmha_batch_decode_get_name_();
 
 template <ck_tile::index_t HDim_,
           typename DataType_,
@@ -957,7 +957,7 @@ struct fmha_fwd_splitkv_combine_traits_
 };
 
 template <typename Traits_>
-void fmha_fwd_splitkv_combine_oneshot_(const ck_tile::stream_config&, fmha_fwd_splitkv_args);
+void fmha_fwd_splitkv_combine_oneshot_(const ck_tile::stream_config&, fmha_batch_decode_args);
 
 template <typename Traits_>
 std::string fmha_fwd_splitkv_combine_get_name_();
@@ -1032,7 +1032,7 @@ float fmha_batch_prefill(fmha_batch_prefill_traits,
                          fmha_batch_prefill_args,
                          const ck_tile::stream_config&);
 
-struct fmha_fwd_splitkv_traits
+struct fmha_batch_decode_traits
 {
     int hdim_q;
     int hdim_v;
@@ -1045,9 +1045,9 @@ struct fmha_fwd_splitkv_traits
     bool do_fp8_static_quant;
     // TODO: padding check is inside this api
 };
-float fmha_fwd_splitkv(fmha_fwd_splitkv_traits,
-                       fmha_fwd_splitkv_args,
-                       const ck_tile::stream_config&);
+float fmha_batch_decode(fmha_batch_decode_traits,
+                        fmha_batch_decode_args,
+                        const ck_tile::stream_config&);
 
 struct fmha_fwd_appendkv_traits
 {
