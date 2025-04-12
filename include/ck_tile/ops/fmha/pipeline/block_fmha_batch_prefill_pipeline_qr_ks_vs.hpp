@@ -5,15 +5,16 @@
 
 #include "ck_tile/core.hpp"
 #include "ck_tile/ops/fmha/block/block_attention_bias_enum.hpp"
-#include "ck_tile/ops/fmha/pipeline/block_fmha_pagedkv_pipeline_qr_ks_vs_default_policy.hpp"
+#include "ck_tile/ops/fmha/pipeline/block_fmha_batch_prefill_pipeline_qr_ks_vs_default_policy.hpp"
 #include "ck_tile/ops/fmha/block/block_dropout.hpp"
 #include "ck_tile/ops/reduce/block/block_reduce.hpp"
 
 namespace ck_tile {
 
 // This pipeline is qkv all located in LDS
-template <typename Problem_, typename Policy_ = BlockFmhaFwdPagedKVPipelineQRKSVSDefaultPolicy>
-struct BlockFmhaFwdPagedKVPipelineQRKSVS
+template <typename Problem_,
+          typename Policy_ = BlockFmhaBatchPrefillWithPagedKVCachePipelineQRKSVSDefaultPolicy>
+struct BlockFmhaBatchPrefillWithPagedKVCachePipelineQRKSVS
 {
     using Problem               = remove_cvref_t<Problem_>;
     using Policy                = remove_cvref_t<Policy_>;

@@ -8,7 +8,7 @@
 
 namespace ck_tile {
 
-using BlockFmhaFwdPagedKVPipelineQRKSVSDefaultPolicy =
+using BlockFmhaBatchPrefillWithPagedKVCachePipelineQRKSVSDefaultPolicy =
     BlockFmhaPipelineQXKSVSCustomPolicy</* QLoadOnce = */ true,
                                         /* AsyncCopy = */ false,
                                         /* NumPrefetchK = */ 1,

@@ -18,8 +18,8 @@
 #include <utility>
 #include <vector>
 
-#if CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_PAGEDKV_API
-#error "we should enable fmha_fwd_pagedkv() api in order to cooperate with fmha_fwd_appendkv()"
+#if CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_BATCH_PREFILL_API
+#error "we should enable fmha_batch_prefill() api in order to cooperate with fmha_fwd_appendkv()"
 #endif
 
 template <typename T>
@@ -342,7 +342,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
     }
 
     ck_tile::index_t page_block_size = arg_parser.get_int("page_block_size");
-#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_PAGEDKV_API
+#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_BATCH_PREFILL_API
     if(0 < page_block_size)
     {
         std::cerr << "paged-kvcache is not supported. ignoring the 'page_block_size' option"
@@ -358,7 +358,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
     }
 
     bool use_cache_batch_idx = arg_parser.get_bool("cache_batch_idx");
-#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_FWD_PAGEDKV_API
+#if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_BATCH_PREFILL_API
     if(use_cache_batch_idx)
     {
         std::cerr << "split-kv is not supported. ignoring the 'cache_batch_idx' option"
@@ -862,7 +862,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
         std::cout << ", cache_batch_idx:" << use_cache_batch_idx;
     }
 #endif
-#if CK_TILE_FMHA_FWD_PAGEDKV_API
+#if CK_TILE_FMHA_BATCH_PREFILL_API
     if(0 < page_block_size)
     {
         std::cout << ", page_block_size:" << page_block_size;
@@ -1020,7 +1020,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             args.batch_stride_knew = batch_stride_knew;
             args.batch_stride_vnew = batch_stride_vnew;
         }
-        else // fmha_fwd_args or fmha_fwd_pagedkv_args or fmha_fwd_splitkv_args
+        else // fmha_fwd_args or fmha_batch_prefill_args or fmha_fwd_splitkv_args
         {
             args.bias_ptr = bias.type == bias_enum::alibi ? alibi_slope_buf.GetDeviceBuffer()
                                                           : bias_buf.GetDeviceBuffer();
@@ -1029,7 +1029,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
             args.seqstart_q_ptr =
                 (mode == mode_enum::group ? seqstart_q.GetDeviceBuffer() : nullptr);
-            if constexpr(!std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
+            if constexpr(!std::is_same_v<fmha_batch_prefill_args, std::decay_t<decltype(args)>>)
             {
                 args.seqstart_k_ptr =
                     (mode == mode_enum::group ? seqstart_k.GetDeviceBuffer() : nullptr);
@@ -1083,7 +1083,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
                     args.drop_seed_offset = std::make_pair(drop_seed, drop_offset);
                 }
             }
-            else if constexpr(std::is_same_v<fmha_fwd_pagedkv_args, std::decay_t<decltype(args)>>)
+            else if constexpr(std::is_same_v<fmha_batch_prefill_args, std::decay_t<decltype(args)>>)
             {
                 args.kv_indptr         = kv_indptr_buf.GetDeviceBuffer();
                 args.kv_page_indices   = kv_page_indices_buf.GetDeviceBuffer();
@@ -1157,16 +1157,16 @@ bool run(const ck_tile::ArgParser& arg_parser)
             return fmha_fwd_splitkv(fmha_splitkv_traits, fmha_splitkv_args, stream_config);
         }
 #endif
-#if CK_TILE_FMHA_FWD_PAGEDKV_API
+#if CK_TILE_FMHA_BATCH_PREFILL_API
         if(use_kvcache)
         {
-            fmha_fwd_pagedkv_traits fmha_pagedkv_traits;
+            fmha_batch_prefill_traits fmha_pagedkv_traits;
             init_traits(fmha_pagedkv_traits);
 
-            fmha_fwd_pagedkv_args fmha_pagedkv_args;
+            fmha_batch_prefill_args fmha_pagedkv_args;
             init_args(fmha_pagedkv_args);
 
-            return fmha_fwd_pagedkv(fmha_pagedkv_traits, fmha_pagedkv_args, stream_config);
+            return fmha_batch_prefill(fmha_pagedkv_traits, fmha_pagedkv_args, stream_config);
         }
 #endif
         fmha_fwd_traits fmha_traits;
@@ -1323,7 +1323,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             q_host_ref.ForEach([&](auto& self, auto i) { self(i) = q_host_ref_ro(i); });
         }
 #endif
-#if CK_TILE_FMHA_FWD_PAGEDKV_API
+#if CK_TILE_FMHA_BATCH_PREFILL_API
         if(0 < page_block_size) {
             if(i_perm) {
                 k_host_ref.ForEach([&](auto& self, auto i) {
@@ -1374,7 +1374,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             });
         }
 #endif
-#if CK_TILE_FMHA_FWD_PAGEDKV_API
+#if CK_TILE_FMHA_BATCH_PREFILL_API
         if(0 < page_block_size) {
             if(is_v_rowmajor) {
                 if(i_perm) {
