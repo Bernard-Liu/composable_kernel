@@ -21,8 +21,7 @@ class HandlerId(IntEnum):
 ops = []
 for importer, module_name, _ in pkgutil.iter_modules(codegen.ops.__path__):
     full_module_name = '%s.%s' % (codegen.ops.__name__, module_name)
-    if full_module_name not in sys.modules:
-        ops.append(importer.find_spec(module_name).loader.load_module(module_name))
+    ops.append(importer.find_spec(module_name).loader.load_module(module_name))
 unwanted_prefix = 'fmha_'
 handlers = dict(
     [(op.__name__[len(unwanted_prefix):] if op.__name__.startswith(unwanted_prefix) else op.__name__,
@@ -37,7 +36,6 @@ def write_blobs(output_dir: Optional[str], api_list : List[str], filters_list : 
         output_dir = Path(output_dir) / GEN_DIR
 
     output_dir.mkdir(parents=True, exist_ok=True)
-
     for api, kernel_filter in zip(api_list, filters_list):
         handler = handlers[api][HandlerId.WRITE_BLOBS]
         handler(output_dir, kernel_filter, receipt, mask_impl)
