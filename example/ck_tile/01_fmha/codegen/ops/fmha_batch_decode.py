@@ -216,7 +216,7 @@ using trait_{F_idx} = fmha_fwd_splitkv_combine_traits_<{F_hdim}, {F_dtype}, {F_m
 #include <iostream>
 
 template<>
-void fmha_fwd_splitkv_combine_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, fmha_batch_decode_args a)
+void fmha_batch_decode_combine_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, fmha_batch_decode_args a)
 {{
     if (a.num_splits <= 8) {{
         instance<3>::run(s, a);
@@ -232,7 +232,7 @@ void fmha_fwd_splitkv_combine_oneshot_<trait_{F_idx}>(const ck_tile::stream_conf
 }}
 
 template<>
-std::string fmha_fwd_splitkv_combine_get_name_<trait_{F_idx}>()
+std::string fmha_batch_decode_combine_get_name_<trait_{F_idx}>()
 {{
     using k_ = instance<6>::fmha_kernel; /// FIXME: choose real kernel type
     return k_::GetName();
@@ -249,12 +249,12 @@ float fmha_batch_decode_(const ck_tile::stream_config& s, fmha_batch_decode_args
     if(s.log_level_ > 0)
     std::cout
     << ", " << fmha_batch_decode_get_name_<fmha_batch_decode_traits_>()
-    << ", " << fmha_fwd_splitkv_combine_get_name_<fmha_fwd_splitkv_combine_traits_>()
+    << ", " << fmha_batch_decode_combine_get_name_<fmha_fwd_splitkv_combine_traits_>()
     << std::flush;
 
     return ck_tile::launch_kernel(s,
         [=](const ck_tile::stream_config& s_){{ fmha_batch_decode_oneshot_<fmha_batch_decode_traits_>(s_, a); }},
-        [=](const ck_tile::stream_config& s_){{ fmha_fwd_splitkv_combine_oneshot_<fmha_fwd_splitkv_combine_traits_>(s_, a); }}
+        [=](const ck_tile::stream_config& s_){{ fmha_batch_decode_combine_oneshot_<fmha_fwd_splitkv_combine_traits_>(s_, a); }}
     );
 }}
 
@@ -610,7 +610,7 @@ class FmhaFwdSplitKVCombineKernel:
     @property
     def name(self) -> str:
         # TODO: we don't encode idx here
-        return f"fmha_fwd_splitkv_combine_d{self.F_hdim}_{self.F_dtype}_{self.F_mode}_" + \
+        return f"fmha_batch_decode_combine_d{self.F_hdim}_{self.F_dtype}_{self.F_mode}_" + \
                 self.F_tile.name + '_' + self.F_pipeline.name
 
     @property

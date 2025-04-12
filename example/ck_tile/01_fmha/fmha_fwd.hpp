@@ -877,8 +877,8 @@ auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
     return ck_tile::make_tuple(kargs, grids);
 }
 
-template <typename Kernel>
-auto fmha_fwd_splitkv_combine_create_kargs_and_grids(fmha_fwd_splitkv_args args)
+template <typename Kernel, typename HostArgs>
+auto fmha_fwd_splitkv_combine_create_kargs_and_grids(HostArgs args)
 {
     assert(args.nhead_q % args.nhead_k == 0);
     auto kargs = [&] {
@@ -916,64 +916,6 @@ auto fmha_fwd_splitkv_combine_create_kargs_and_grids(fmha_fwd_splitkv_args args)
                                      args.scale_o,
                                      args.stride_o_acc,
                                      args.stride_o,
-                                     args.nhead_stride_lse_acc,
-                                     args.nhead_stride_o_acc,
-                                     args.nhead_stride_lse,
-                                     args.nhead_stride_o,
-                                     args.batch_stride_lse_acc,
-                                     args.batch_stride_o_acc,
-                                     args.batch_stride_lse,
-                                     args.batch_stride_o,
-                                     args.split_stride_lse_acc,
-                                     args.split_stride_o_acc);
-        }
-    }();
-
-    dim3 grids = Kernel::GridSize(args.batch, args.nhead_q, args.max_seqlen_q, args.hdim_v);
-
-    return ck_tile::make_tuple(kargs, grids);
-}
-
-template <typename Kernel>
-auto fmha_batch_decode_combine_create_kargs_and_grids(fmha_batch_decode_args args)
-{
-    assert(args.nhead_q % args.nhead_k == 0);
-    auto kargs = [&] {
-        // create group mode kernel argumentszs
-        if constexpr(Kernel::kIsGroupMode)
-        {
-            return Kernel::MakeKargs(args.lse_acc_ptr,
-                                     args.o_acc_ptr,
-                                     args.lse_ptr,
-                                     args.o_ptr,
-                                     args.batch,
-                                     args.seqstart_q_ptr,
-                                     args.hdim_v,
-                                     args.num_splits,
-                                     args.scale_o,
-                                     args.stride_o_acc,
-                                     args.stride_o,
-                                     args.nhead_stride_lse_acc,
-                                     args.nhead_stride_o_acc,
-                                     args.nhead_stride_lse,
-                                     args.nhead_stride_o,
-                                     args.split_stride_lse_acc,
-                                     args.split_stride_o_acc);
-        }
-        else
-        { // create batch mode kernel arguments
-            return Kernel::MakeKargs(args.lse_acc_ptr,
-                                     args.o_acc_ptr,
-                                     args.lse_ptr,
-                                     args.o_ptr,
-                                     args.batch,
-                                     args.seqlen_q,
-                                     args.hdim_v,
-                                     args.num_splits,
-                                     args.scale_o,
-                                     args.stride_o_acc,
-                                     args.stride_o,
-
                                      args.nhead_stride_lse_acc,
                                      args.nhead_stride_o_acc,
                                      args.nhead_stride_lse,

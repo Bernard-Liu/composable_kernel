@@ -1160,13 +1160,13 @@ bool run(const ck_tile::ArgParser& arg_parser)
 #if CK_TILE_FMHA_BATCH_PREFILL_API
         if(use_kvcache)
         {
-            fmha_batch_prefill_traits fmha_pagedkv_traits;
-            init_traits(fmha_pagedkv_traits);
+            fmha_batch_prefill_traits fmha_prefill_traits;
+            init_traits(fmha_prefill_traits);
 
-            fmha_batch_prefill_args fmha_pagedkv_args;
-            init_args(fmha_pagedkv_args);
+            fmha_batch_prefill_args fmha_prefill_args;
+            init_args(fmha_prefill_args);
 
-            return fmha_batch_prefill(fmha_pagedkv_traits, fmha_pagedkv_args, stream_config);
+            return fmha_batch_prefill(fmha_prefill_traits, fmha_prefill_args, stream_config);
         }
 #endif
         fmha_fwd_traits fmha_traits;
