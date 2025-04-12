@@ -349,7 +349,7 @@ struct BlockFmhaPipelineQRKSVS
                 });
             }
 
-            const auto v_prefetch = v_dram_window.load(); // prefetch load v tile
+            const auto v_prefetch = load_tile(v_dram_window); // prefetch load v tile
 
             static_for<0, V_KRepeat, 1>{}([&](auto k0) {
                 v_offsets[k0] = page_idx[kK1 + v_coord[VPageIndexDim] + k0.value] * stride_v;
