@@ -18,9 +18,7 @@
 
 namespace ck_tile {
 
-template <typename TileWindow_,
-          index_t i_access           = -1,
-          bool oob_conditional_check = true>
+template <typename TileWindow_, index_t i_access = -1, bool oob_conditional_check = true>
 CK_TILE_DEVICE auto load_tile(const TileWindow_& tile_window,
                               number<i_access>                     = {},
                               bool_constant<oob_conditional_check> = {})

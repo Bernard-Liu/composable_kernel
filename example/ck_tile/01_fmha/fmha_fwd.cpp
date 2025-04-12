@@ -595,7 +595,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
     bool is_v_rowmajor = vlayout == std::string("r");
     assert(is_v_rowmajor);
     assert(!i_perm);
-    
+
     // host memory for storing all the tensor elements
     const ck_tile::index_t shape_batch = (mode == mode_enum::batch ? batch : 1);
     const ck_tile::index_t shape_seqlen_q =
@@ -755,12 +755,10 @@ bool run(const ck_tile::ArgParser& arg_parser)
             }
         }
     }
-    k_host.ForEach([&](auto& self, auto i) {
-        k_host_sgl(page_idx_host(i[1]), i[2], i[3]) = self(i);
-    });
-    v_host.ForEach([&](auto& self, auto i) {
-        v_host_sgl(page_idx_host(i[1]), i[2], i[3]) = self(i);
-    });
+    k_host.ForEach(
+        [&](auto& self, auto i) { k_host_sgl(page_idx_host(i[1]), i[2], i[3]) = self(i); });
+    v_host.ForEach(
+        [&](auto& self, auto i) { v_host_sgl(page_idx_host(i[1]), i[2], i[3]) = self(i); });
     // k_host.savetxt("k_host.txt");
     // k_host_sgl.savetxt("k_host_sgl.txt");
     // v_host_sgl.savetxt("v_host_sgl.txt");
@@ -1020,8 +1018,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
                 (mode == mode_enum::group ? seqstart_q.GetDeviceBuffer() : nullptr);
             args.seqstart_k_ptr =
                 (mode == mode_enum::group ? seqstart_k.GetDeviceBuffer() : nullptr);
-            args.page_idx_ptr =
-                (mode == mode_enum::group ? page_idx.GetDeviceBuffer() : nullptr);
+            args.page_idx_ptr = (mode == mode_enum::group ? page_idx.GetDeviceBuffer() : nullptr);
             args.seqlen_k_ptr = ((mode == mode_enum::batch && use_kvcache) || 0 <= k_paddings_[0]
                                      ? seqlen_k_buf.GetDeviceBuffer()
                                      : nullptr);

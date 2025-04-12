@@ -635,7 +635,8 @@ struct tile_window_with_static_distribution
     //             tuple<index_t, index_t>(0, window_adaptor_thread_coord.get_bottom_index()[1]);
 
     //         auto bottom_tensor_thread_coord = make_tensor_coordinate(
-    //             bottom_tensor_view_.get_tensor_descriptor(), bottom_tensor_thread_origin_idx_tmp);
+    //             bottom_tensor_view_.get_tensor_descriptor(),
+    //             bottom_tensor_thread_origin_idx_tmp);
 
     //         static_for<0, NumAccessPerCoord, 1>{}([&](auto iCoordAccess) {
     //             constexpr auto iAccess = number<iCoord * NumAccessPerCoord + iCoordAccess>{};

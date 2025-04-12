@@ -254,7 +254,7 @@ struct BlockFmhaPipelineQRKSVS
         auto k_dram_block_window =
             make_tile_window(k_dram_block_window_tmp.get_bottom_tensor_view(),
                              k_dram_block_window_tmp.get_window_lengths(),
-                             {seqlen_k_start, 0}); //todo fixme felix
+                             {seqlen_k_start, 0}); // todo fixme felix
 
         const auto bias_origin = bias_dram_block_window_tmp.get_window_origin();
         auto bias_dram_window =
@@ -266,23 +266,24 @@ struct BlockFmhaPipelineQRKSVS
         auto randval_dram_window = dropout.template MakeRandvalDramWindow<decltype(gemm_0)>(
             randval_dram_block_window_tmp, seqlen_k_start);
 
-        auto v_dist = Policy::template MakeVDramTileDistribution<Problem>();
-        auto v_coord = v_dist.calculate_index();
-        const auto VPageIndexDim = I1;
-        using VDstrEncode = typename decltype(v_dist)::DstrEncode;
+        auto v_dist                 = Policy::template MakeVDramTileDistribution<Problem>();
+        auto v_coord                = v_dist.calculate_index();
+        const auto VPageIndexDim    = I1;
+        using VDstrEncode           = typename decltype(v_dist)::DstrEncode;
         constexpr index_t V_KRepeat = VDstrEncode::hs_lengthss_[I1][I3];
         statically_indexed_array<index_t, V_KRepeat> v_offsets;
         static_for<0, V_KRepeat, 1>{}([&](auto k0) {
             v_offsets[k0] = page_idx[v_coord[VPageIndexDim] + k0.value] * stride_v;
-            // printf("1tid %d %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], k0.value, page_idx[v_coord[VPageIndexDim] + k0.value], stride_v);
+            // printf("1tid %d %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], k0.value,
+            // page_idx[v_coord[VPageIndexDim] + k0.value], stride_v);
         });
         auto v_dram_window =
             make_tile_scatter_gather(v_dram_block_window_tmp.get_bottom_tensor_view(),
-                             v_dram_block_window_tmp.get_window_lengths(),
-                             {0, seqlen_k_start}, // TODO: hdim split?
-                             v_dist,
-                             v_offsets,
-                             VPageIndexDim);
+                                     v_dram_block_window_tmp.get_window_lengths(),
+                                     {0, seqlen_k_start}, // TODO: hdim split?
+                                     v_dist,
+                                     v_offsets,
+                                     VPageIndexDim);
         // auto v_dram_window =
         //     make_tile_window(v_dram_block_window_tmp.get_bottom_tensor_view(),
         //                      v_dram_block_window_tmp.get_window_lengths(),
@@ -301,20 +302,20 @@ struct BlockFmhaPipelineQRKSVS
         do
         {
             // STAGE 1, QK gemm
-            auto k_dist = Policy::template MakeKDramTileDistribution<Problem>();
-            auto k_coord = k_dist.calculate_index();
-            using KDstrEncode = typename decltype(k_dist)::DstrEncode;
+            auto k_dist               = Policy::template MakeKDramTileDistribution<Problem>();
+            auto k_coord              = k_dist.calculate_index();
+            using KDstrEncode         = typename decltype(k_dist)::DstrEncode;
             constexpr index_t NRepeat = KDstrEncode::hs_lengthss_[I0][I0];
             statically_indexed_array<index_t, NRepeat> k_offsets;
             static_for<0, NRepeat, 1>{}([&](auto n0) {
                 k_offsets[n0] = page_idx[k_coord[0] + kN0 / NRepeat * n0.value] * stride_k;
             });
-            auto k_dram_window = make_tile_scatter_gather(
-                k_dram_block_window.get_bottom_tensor_view(),
-                k_dram_block_window.get_window_lengths(),
-                k_dram_block_window.get_window_origin(),
-                k_dist,
-                k_offsets); // K DRAM tile window for
+            auto k_dram_window =
+                make_tile_scatter_gather(k_dram_block_window.get_bottom_tensor_view(),
+                                         k_dram_block_window.get_window_lengths(),
+                                         k_dram_block_window.get_window_origin(),
+                                         k_dist,
+                                         k_offsets); // K DRAM tile window for
 
             auto k_block_tile = load_tile(k_dram_window);
             {
@@ -359,10 +360,12 @@ struct BlockFmhaPipelineQRKSVS
             // const auto v_prefetch = load_tile(v_dram_window); // prefetch load v tile
             static_for<0, V_KRepeat, 1>{}([&](auto k0) {
                 v_offsets[k0] = page_idx[kK1 + v_coord[VPageIndexDim] + k0.value] * stride_v;
-                // printf("2tid %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], kK1 + v_coord[VPageIndexDim] + k0.value, page_idx[kK1 + v_coord[VPageIndexDim] + k0.value]);
+                // printf("2tid %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], kK1 +
+                // v_coord[VPageIndexDim] + k0.value, page_idx[kK1 + v_coord[VPageIndexDim] +
+                // k0.value]);
             });
             v_dram_window.update_page_idx(v_offsets);
-            {                                                 // tail
+            { // tail
                 block_sync_lds();
                 gemm_0(s_acc,
                        get_slice_tile(q_tile,
@@ -563,10 +566,14 @@ struct BlockFmhaPipelineQRKSVS
             {
                 static_for<0, k1_loops - 1, 1>{}([&](auto i_k1) {
                     const auto v = load_tile(v_dram_window); // load next v
-                    
+
                     static_for<0, V_KRepeat, 1>{}([&](auto k0) {
-                        v_offsets[k0] = page_idx[kK1 * 2 + i_k1.value * kK1 + v_coord[VPageIndexDim] + k0.value] * stride_v;
-                        // printf("3tid %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], kK1 * 2 + i_k1.value * kK1 + v_coord[VPageIndexDim] + k0.value, page_idx[kK1 + i_k1.value * kK1 + v_coord[VPageIndexDim] + k0.value]);
+                        v_offsets[k0] = page_idx[kK1 * 2 + i_k1.value * kK1 +
+                                                 v_coord[VPageIndexDim] + k0.value] *
+                                        stride_v;
+                        // printf("3tid %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], kK1 * 2
+                        // + i_k1.value * kK1 + v_coord[VPageIndexDim] + k0.value, page_idx[kK1 +
+                        // i_k1.value * kK1 + v_coord[VPageIndexDim] + k0.value]);
                     });
                     v_dram_window.update_page_idx(v_offsets);
                     block_sync_lds();

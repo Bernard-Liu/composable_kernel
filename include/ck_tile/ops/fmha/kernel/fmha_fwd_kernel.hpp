@@ -964,7 +964,7 @@ struct FmhaFwdKernel
         const index_t i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * FmhaPipeline::kM0);
         const index_t i_n1 = __builtin_amdgcn_readfirstlane(i_tile_n * FmhaPipeline::kN1);
 
-        long_index_t batch_offset_q       = 0;
+        long_index_t batch_offset_q = 0;
         // long_index_t batch_offset_k       = 0;
         long_index_t batch_offset_v       = 0;
         long_index_t batch_offset_bias    = 0;
@@ -988,8 +988,8 @@ struct FmhaFwdKernel
             {
                 batch_offset_v = key_start;
             }
-            
-            kargs.page_idx +=  key_start;
+
+            kargs.page_idx += key_start;
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
                 batch_offset_bias = query_start * kargs.stride_bias + key_start;
