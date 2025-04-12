@@ -10,7 +10,6 @@
 #include "ck_tile/ops/reduce/block/block_reduce.hpp"
 #include "ck_tile/core/tensor/tile_distribution.hpp"
 #include "ck_tile/core/tensor/tile_scatter_gather.hpp"
-// #include "ck_tile/core/tensor/tile_scatter_gather_debug.hpp"
 
 namespace ck_tile {
 
@@ -251,10 +250,11 @@ struct BlockFmhaPipelineQRKSVS
                 return o_acc;
             }
         }
+
         auto k_dram_block_window =
             make_tile_window(k_dram_block_window_tmp.get_bottom_tensor_view(),
                              k_dram_block_window_tmp.get_window_lengths(),
-                             {seqlen_k_start, 0}); // todo fixme felix
+                             {seqlen_k_start, 0});
 
         const auto bias_origin = bias_dram_block_window_tmp.get_window_origin();
         auto bias_dram_window =
@@ -274,8 +274,6 @@ struct BlockFmhaPipelineQRKSVS
         statically_indexed_array<index_t, V_KRepeat> v_offsets;
         static_for<0, V_KRepeat, 1>{}([&](auto k0) {
             v_offsets[k0] = page_idx[v_coord[VPageIndexDim] + k0.value] * stride_v;
-            // printf("1tid %d %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], k0.value,
-            // page_idx[v_coord[VPageIndexDim] + k0.value], stride_v);
         });
         auto v_dram_window =
             make_tile_scatter_gather(v_dram_block_window_tmp.get_bottom_tensor_view(),
@@ -284,11 +282,6 @@ struct BlockFmhaPipelineQRKSVS
                                      v_dist,
                                      v_offsets,
                                      VPageIndexDim);
-        // auto v_dram_window =
-        //     make_tile_window(v_dram_block_window_tmp.get_bottom_tensor_view(),
-        //                      v_dram_block_window_tmp.get_window_lengths(),
-        //                      {0, seqlen_k_start}, // TODO: hdim split?
-        //                      v_dist);
 
         auto q_tile = tile_elementwise_in(q_element_func, q);
 
@@ -357,14 +350,12 @@ struct BlockFmhaPipelineQRKSVS
             }
 
             const auto v_prefetch = v_dram_window.load(); // prefetch load v tile
-            // const auto v_prefetch = load_tile(v_dram_window); // prefetch load v tile
+
             static_for<0, V_KRepeat, 1>{}([&](auto k0) {
                 v_offsets[k0] = page_idx[kK1 + v_coord[VPageIndexDim] + k0.value] * stride_v;
-                // printf("2tid %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], kK1 +
-                // v_coord[VPageIndexDim] + k0.value, page_idx[kK1 + v_coord[VPageIndexDim] +
-                // k0.value]);
             });
             v_dram_window.update_page_idx(v_offsets);
+
             { // tail
                 block_sync_lds();
                 gemm_0(s_acc,
@@ -571,11 +562,9 @@ struct BlockFmhaPipelineQRKSVS
                         v_offsets[k0] = page_idx[kK1 * 2 + i_k1.value * kK1 +
                                                  v_coord[VPageIndexDim] + k0.value] *
                                         stride_v;
-                        // printf("3tid %d %d %d %d\n", threadIdx.x, v_coord[VPageIndexDim], kK1 * 2
-                        // + i_k1.value * kK1 + v_coord[VPageIndexDim] + k0.value, page_idx[kK1 +
-                        // i_k1.value * kK1 + v_coord[VPageIndexDim] + k0.value]);
                     });
                     v_dram_window.update_page_idx(v_offsets);
+
                     block_sync_lds();
                     gemm_1(o_acc,
                            get_slice_tile(
