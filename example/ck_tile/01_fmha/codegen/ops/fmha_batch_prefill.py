@@ -29,7 +29,7 @@ K0_MAX_SUBMAX_MAP = {
     256: 256
 }
 
-fmha_batch_prefill_PIPELINE_MAP = {
+FMHA_BATCH_PREFILL_PIPELINE_MAP = {
     "qr" : "ck_tile::BlockFmhaBatchPrefillWithPagedKVCachePipelineQRKSVS",
 }
 
@@ -377,7 +377,7 @@ class FmhaFwdKernel:
                 F_pipeline_enum = PIPELINE_ENUM_MAP[self.F_pipeline.tag],
                 F_mask          = get_mask_map(self.mask_impl)[self.F_pipeline.F_mask],
                 F_mode          = MODE_MAP[self.F_mode],
-                F_pipeline      = fmha_batch_prefill_PIPELINE_MAP[self.F_pipeline.tag])
+                F_pipeline      = FMHA_BATCH_PREFILL_PIPELINE_MAP[self.F_pipeline.tag])
 
     @property
     def name(self) -> str:
@@ -459,11 +459,16 @@ def get_fwd_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> Tuple[Fm
                         pipelines.append(FmhaFwdPipeline('qr', 'row', 't', 't', 't', 't', bias, lse, dropout, squant, mask))
                         pipelines.append(FmhaFwdPipeline('qr', 'col', 'f', 'f', 'f', 'f', bias, lse, dropout, squant, mask))
                         pipelines.append(FmhaFwdPipeline('qr', 'col', 't', 't', 't', 't', bias, lse, dropout, squant, mask))
-                    else:                        
-                        pipelines.append(FmhaFwdPipeline('qr', 'row', 't', 'f', 't', 't', bias, lse, dropout, squant, mask))
+                    else:
+                        pipelines.append(FmhaFwdPipeline('qr', 'row', 't', 't', 'f', 'f', bias, lse, dropout, squant, mask))
+                        pipelines.append(FmhaFwdPipeline('qr', 'col', 't', 't', 'f', 'f', bias, lse, dropout, squant, mask))
                         pipelines.append(FmhaFwdPipeline('qr', 'row', 't', 't', 't', 't', bias, lse, dropout, squant, mask))
-                        pipelines.append(FmhaFwdPipeline('qr', 'col', 't', 'f', 't', 't', bias, lse, dropout, squant, mask))
                         pipelines.append(FmhaFwdPipeline('qr', 'col', 't', 't', 't', 't', bias, lse, dropout, squant, mask))
+
+                        # pipelines.append(FmhaFwdPipeline('qr_async', 'row', 't', 'f', 't', 't', bias, lse, dropout, squant, mask))
+                        # pipelines.append(FmhaFwdPipeline('qr_async', 'row', 't', 't', 't', 't', bias, lse, dropout, squant, mask))
+                        # pipelines.append(FmhaFwdPipeline('qr_async', 'col', 't', 'f', 't', 't', bias, lse, dropout, squant, mask))
+                        # pipelines.append(FmhaFwdPipeline('qr_async', 'col', 't', 't', 't', 't', bias, lse, dropout, squant, mask))
                     if receipt == 1 and bias != "bias":
                         pipelines.append(FmhaFwdPipeline('qr', 'row', 't', 't', 't', 't', bias, lse, dropout, squant, mask)) # TODO: cover arbitraty hdim
                         pipelines.append(FmhaFwdPipeline('qr', 'col', 't', 'f', 't', 't', bias, lse, dropout, squant, mask)) # TODO: cover arbitraty hdim
@@ -536,6 +541,13 @@ def get_fwd_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> Tuple[Fm
                 elif receipt == 200:
                     cond = dtype in ['fp16', 'bf16']
                     cond &= mode == 'group'
+                    cond &= pipeline.F_vlayout == 'row'
+                    cond &= pipeline.F_squant == 'f'
+                    if not cond:
+                        continue
+                # aiter::mha_fwd C++ api integration
+                elif receipt == 600:
+                    cond = dtype in ['fp16', 'bf16']
                     cond &= pipeline.F_vlayout == 'row'
                     cond &= pipeline.F_squant == 'f'
                     if not cond:
