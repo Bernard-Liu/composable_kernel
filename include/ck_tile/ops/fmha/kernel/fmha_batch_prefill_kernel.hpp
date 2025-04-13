@@ -563,6 +563,9 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
             const long_index_t query_start = kargs.seqstart_q_ptr[i_batch];
 
             batch_offset_q = query_start * kargs.stride_q;
+
+            kargs.kv_page_indices += kargs.kv_indptr[i_batch];
+
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
                 batch_offset_bias = query_start * kargs.stride_bias;
@@ -611,11 +614,15 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
         }
 
         // for simplicity, batch stride we just modify the pointer
-        const index_t i_nhead_k = i_nhead / kargs.nhead_ratio_qk;
-
         const QDataType* q_ptr = reinterpret_cast<const QDataType*>(kargs.q_ptr) +
                                  static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_q +
                                  batch_offset_q;
+        const KDataType* k_ptr =
+            reinterpret_cast<const KDataType*>(kargs.k_ptr) +
+            static_cast<long_index_t>(i_nhead / kargs.nhead_ratio_qk) * kargs.nhead_stride_k;
+        const VDataType* v_ptr =
+            reinterpret_cast<const VDataType*>(kargs.v_ptr) +
+            static_cast<long_index_t>(i_nhead / kargs.nhead_ratio_qk) * kargs.nhead_stride_v;
         ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
                            static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_o +
                            batch_offset_o;
@@ -643,10 +650,10 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
                     sequence<kPadSeqLenQ, kPadHeadDimQ>{});
             }
         }();
-        const auto make_k_dram = [&](const KDataType* data, index_t height) {
+        const auto k_dram = [&]() {
             const auto k_dram_naive = make_naive_tensor_view<address_space_enum::global>(
-                data, // will update this pointer if using paged-kvcache
-                make_tuple(height, kargs.hdim_q),
+                k_ptr,
+                make_tuple(kargs.seqlen_k, kargs.hdim_q),
                 make_tuple(kargs.stride_k, 1),
                 number<FmhaPipeline::kAlignmentK>{},
                 number<1>{});
@@ -656,14 +663,13 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
                 k_dram_naive,
                 make_tuple(number<FmhaPipeline::kN0>{}, number<FmhaPipeline::kK0>{}),
                 sequence<kPadSeqLenK_, kPadHeadDimQ>{});
-        };
-
-        const auto make_v_dram = [&](const VDataType* data, index_t length) {
+        }();
+        const auto v_dram = [&]() {
             if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
             {
                 const auto v_dram_naive = make_naive_tensor_view<address_space_enum::global>(
-                    data, // will update this pointer if using paged-kvcache
-                    make_tuple(length, kargs.hdim_v),
+                    v_ptr,
+                    make_tuple(kargs.seqlen_k, kargs.hdim_v),
                     make_tuple(kargs.stride_v, 1),
                     number<FmhaPipeline::kAlignmentV>{},
                     number<1>{});
@@ -671,7 +677,7 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
                 const auto v_dram_transposed =
                     transform_tensor_view(v_dram_naive,
                                           make_tuple(make_pass_through_transform(kargs.hdim_v),
-                                                     make_pass_through_transform(length)),
+                                                     make_pass_through_transform(kargs.seqlen_k)),
                                           make_tuple(sequence<1>{}, sequence<0>{}),
                                           make_tuple(sequence<0>{}, sequence<1>{}));
 
@@ -684,8 +690,8 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
             else
             {
                 const auto v_dram_naive = make_naive_tensor_view<address_space_enum::global>(
-                    data, // will update this pointer if using paged-kvcache
-                    make_tuple(kargs.hdim_v, length),
+                    v_ptr,
+                    make_tuple(kargs.hdim_v, kargs.seqlen_k),
                     make_tuple(kargs.stride_v, 1),
                     number<FmhaPipeline::kAlignmentV>{},
                     number<1>{});
@@ -696,38 +702,6 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
                     make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
                     sequence<kPadHeadDimV_, kPadSeqLenK>{});
             }
-        };
-
-        auto k_page_block_navigator = [&, i_batch_ = i_batch]() {
-            const auto* block_indices = kargs.kv_page_indices + kargs.kv_indptr[i_batch_];
-            const long_index_t fixed_offset =
-                static_cast<long_index_t>(i_nhead_k) * kargs.nhead_stride_k;
-
-            return make_page_block_navigator<const KDataType, 0>(
-                kargs.k_ptr,
-                kargs.batch_stride_k, // kcache page-block stride/size
-                fixed_offset,
-                block_indices,
-                num_page_blocks,
-                kargs.page_block_size,
-                make_k_dram(nullptr, kargs.page_block_size),
-                make_k_dram(nullptr, last_page_len));
-        }();
-
-        auto v_page_block_navigator = [&, i_batch_ = i_batch]() {
-            const auto* block_indices = kargs.kv_page_indices + kargs.kv_indptr[i_batch_];
-            const long_index_t fixed_offset =
-                static_cast<long_index_t>(i_nhead_k) * kargs.nhead_stride_v;
-
-            return make_page_block_navigator<const VDataType, 1>(
-                kargs.v_ptr,
-                kargs.batch_stride_v, // vcache page-block stride/size
-                fixed_offset,
-                block_indices,
-                num_page_blocks,
-                kargs.page_block_size,
-                make_v_dram(nullptr, kargs.page_block_size),
-                make_v_dram(nullptr, last_page_len));
         }();
 
         auto q_dram_window = make_tile_window(
@@ -741,11 +715,13 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
             }(),
             {i_m0, 0});
 
-        auto k_dram_window_lengths =
-            make_tuple(number<FmhaPipeline::kN0>{}, number<FmhaPipeline::kK0>{});
-        auto v_dram_window_lengths =
-            make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{});
+        auto k_dram_window = make_tile_window(
+            k_dram, make_tuple(number<FmhaPipeline::kN0>{}, number<FmhaPipeline::kK0>{}), {0, 0});
 
+        auto v_dram_window =
+            make_tile_window(v_dram,
+                             make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
+                             {i_n1, 0});
         /// FIXME: Before C++20, capturing structured binding variables are not supported. Remove
         /// following copy capture of the 'i_nhead' if in C++20
         const auto bias_dram_window = [&, i_nhead_ = i_nhead]() {
@@ -909,11 +885,9 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
                 return FmhaPipeline{}(
                     q_dram_window,
                     identity{}, // q_element_func
-                    k_dram_window_lengths,
-                    k_page_block_navigator,
+                    k_dram_window,
                     identity{}, // k_element_func
-                    v_dram_window_lengths,
-                    v_page_block_navigator,
+                    v_dram_window,
                     identity{}, // v_element_func
                     bias_dram_window,
                     identity{}, // bias_element_func
@@ -927,15 +901,16 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
                     position_encoding,
                     kargs.scale_s,
                     smem_ptr,
+                    kargs.kv_page_indices,
+                    kargs.stride_k,
+                    kargs.stride_v,
                     dropout);
             }
             else
             {
                 return FmhaPipeline{}(q_dram_window,
-                                      k_dram_window_lengths,
-                                      k_page_block_navigator,
-                                      v_dram_window_lengths,
-                                      v_page_block_navigator,
+                                      k_dram_window,
+                                      v_dram_window,
                                       bias_dram_window,
                                       randval_dram_window,
                                       lse_dram_window,
@@ -943,6 +918,9 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
                                       position_encoding,
                                       kargs.scale_s,
                                       smem_ptr,
+                                      kargs.kv_page_indices,
+                                      kargs.stride_k,
+                                      kargs.stride_v,
                                       dropout);
             }
         }();
