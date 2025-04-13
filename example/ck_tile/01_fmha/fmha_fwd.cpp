@@ -350,12 +350,6 @@ bool run(const ck_tile::ArgParser& arg_parser)
         page_block_size = 0;
     }
 #endif
-    if(!(page_block_size % 128 == 0))
-    {
-        std::cerr << "only paged-kvcache block size divisible by 128 are currently supported"
-                  << std::endl;
-        return false;
-    }
 
     bool use_cache_batch_idx = arg_parser.get_bool("cache_batch_idx");
 #if !CK_TILE_FMHA_FWD_APPENDKV_API && !CK_TILE_FMHA_BATCH_PREFILL_API
