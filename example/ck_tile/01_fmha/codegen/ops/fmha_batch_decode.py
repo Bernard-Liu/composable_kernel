@@ -749,6 +749,7 @@ def get_batch_decode_blobs(kernel_filter : Optional[str], receipt, mask_impl) ->
                     cond &= pipeline.F_vlayout == 'row'
                     cond &= pipeline.F_bias == 'no'
                     cond &= pipeline.F_squant == 'f'
+                    cond &= pipeline.F_pagedkv == 't'
                     if not cond:
                         continue
                 # aiter::mha_fwd_splikv C++ api integration

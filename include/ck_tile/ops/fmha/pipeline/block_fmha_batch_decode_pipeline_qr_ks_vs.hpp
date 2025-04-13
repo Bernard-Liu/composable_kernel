@@ -44,6 +44,10 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
     static constexpr index_t kQKHeaddim    = BlockFmhaShape::kQKHeaddim;
     static constexpr index_t kSubQKHeaddim = BlockFmhaShape::kSubQKHeaddim;
 
+    static constexpr auto I0 = number<0>{};
+    static constexpr auto I1 = number<1>{};
+    static constexpr auto I2 = number<2>{};
+    static constexpr auto I3 = number<3>{};
     static_assert(kSubQKHeaddim <= 256, "hdim bigger than 256 is not suitable for this pipeline!");
 
     static constexpr bool kIsGroupMode     = Problem::kIsGroupMode;
@@ -114,10 +118,8 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
     }
 
     template <typename QDramBlockWindowTmp,
-              typename KDramBlockWindowLengths,
-              typename KPageBlockNavigator,
-              typename VDramBlockWindowLengths,
-              typename VPageBlockNavigator,
+              typename KDramBlockWindowTmp,
+              typename VDramBlockWindowTmp,
               typename BiasDramBlockWindowTmp,
               typename LSEaccDramBlockWindowTmp,
               typename QElementFunction,
@@ -132,11 +134,9 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
     CK_TILE_HOST_DEVICE auto
     operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp, // M0*K0 tile
                const QElementFunction& q_element_func,
-               const KDramBlockWindowLengths& k_dram_block_window_lengths, // N0*K0 tile
-               const KPageBlockNavigator& k_page_block_navigator,
+               const KDramBlockWindowTmp& k_dram_block_window_tmp, // N0*K0 tile
                const KElementFunction& k_element_func,
-               const VDramBlockWindowLengths& v_dram_block_window_lengths, // N1*K1 tile
-               const VPageBlockNavigator& v_page_block_navigator,
+               const VDramBlockWindowTmp& v_dram_block_window_tmp, // N1*K1 tile
                const VElementFunction& v_element_func,
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                const BiasElementFunction& bias_element_func,
@@ -150,21 +150,24 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                FmhaMask mask,
                PositionEncoding position_encoding,
                float scale_s,
-               void* smem_ptr) const
+               void* smem_ptr,
+               const int32_t* kv_page_indices,
+               const index_t stride_k,
+               const index_t stride_v) const
     {
         static_assert(
             std::is_same_v<QDataType, remove_cvref_t<typename QDramBlockWindowTmp::DataType>> &&
-                std::is_same_v<KDataType, remove_cvref_t<typename KPageBlockNavigator::DataType>> &&
-                std::is_same_v<VDataType, remove_cvref_t<typename VPageBlockNavigator::DataType>>,
+                std::is_same_v<KDataType, remove_cvref_t<typename KDramBlockWindowTmp::DataType>> &&
+                std::is_same_v<VDataType, remove_cvref_t<typename VDramBlockWindowTmp::DataType>>,
             "wrong!");
 
         static_assert(kM0 == QDramBlockWindowTmp{}.get_window_lengths()[number<0>{}] &&
                           kSubQKHeaddim ==
                               QDramBlockWindowTmp{}.get_window_lengths()[number<1>{}] &&
-                          kN0 == KDramBlockWindowLengths{}[number<0>{}] &&
-                          kK0 == KDramBlockWindowLengths{}[number<1>{}] &&
-                          kN1 == VDramBlockWindowLengths{}[number<0>{}] &&
-                          kK1 == VDramBlockWindowLengths{}[number<1>{}] &&
+                          kN0 == KDramBlockWindowTmp{}.get_window_lengths()[number<0>{}] &&
+                          kK0 == KDramBlockWindowTmp{}.get_window_lengths()[number<1>{}] &&
+                          kN1 == VDramBlockWindowTmp{}.get_window_lengths()[number<0>{}] &&
+                          kK1 == VDramBlockWindowTmp{}.get_window_lengths()[number<1>{}] &&
                           kM0 == BiasDramBlockWindowTmp{}.get_window_lengths()[number<0>{}] &&
                           kN0 == BiasDramBlockWindowTmp{}.get_window_lengths()[number<1>{}],
                       "wrong!");
@@ -243,16 +246,16 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
         set_tile(m, -numeric<SMPLComputeDataType>::infinity());
         clear_tile(l);
 
-        const auto q_origin = q_dram_window.get_window_origin();
-        const auto [logical_seqlen_k_start, logical_seqlen_k_end] = mask.GetTileRangeAlongX(
+        const auto q_origin                       = q_dram_window.get_window_origin();
+        const auto [seqlen_k_start, seqlen_k_end] = mask.GetTileRangeAlongX(
             q_origin.at(number<0>{}), number<kM0>{}, number<kN0>{}, num_splits, i_split);
 
+        const index_t num_total_loop = integer_divide_ceil(seqlen_k_end - seqlen_k_start, kN0);
+
         // check early exit if no work to do
-        if constexpr(FmhaMask::IsMasking || kPadSeqLenK || kHasUnevenSplits)
+        if constexpr(FmhaMask::IsMasking || kPadSeqLenK)
         {
-            const index_t logical_num_total_loop =
-                integer_divide_ceil(logical_seqlen_k_end - logical_seqlen_k_start, kN0);
-            if(logical_num_total_loop <= 0)
+            if(num_total_loop <= 0)
             {
                 if constexpr(kStoreLSE)
                 {
@@ -274,42 +277,34 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
             }
         }
 
-        const index_t physical_seqlen_k_start = logical_seqlen_k_start;
-        const index_t physical_seqlen_k_end   = logical_seqlen_k_end;
-        // make sure the first tile is completely located in page-block (page-block size should be
-        // divisible by kN0)
-        // relationship between each *_start variables: aligned_physical_seqlen_k_start <=
-        // physical_seqlen_k_start, logical_seqlen_k_start <= physical_seqlen_k_start
-        const index_t aligned_physical_seqlen_k_start =
-            [&, physical_seqlen_k_start_ = physical_seqlen_k_start] {
-                if constexpr(kIsPagedKV)
-                {
-                    return kN0 * integer_divide_floor(physical_seqlen_k_start_, kN0);
-                }
-                else
-                {
-                    return physical_seqlen_k_start_;
-                }
-            }();
-        const index_t num_total_loop =
-            integer_divide_ceil(physical_seqlen_k_end - aligned_physical_seqlen_k_start, kN0);
-
-        auto [i_page_block_k, k_dram_block_window] = k_page_block_navigator.make_tile_window(
-            k_dram_block_window_lengths, {aligned_physical_seqlen_k_start, 0});
+        auto k_dram_block_window =
+            make_tile_window(k_dram_block_window_tmp.get_bottom_tensor_view(),
+                             k_dram_block_window_tmp.get_window_lengths(),
+                             {seqlen_k_start, 0});
 
         const auto bias_origin = bias_dram_block_window_tmp.get_window_origin();
         auto bias_dram_window =
             make_tile_window(bias_dram_block_window_tmp.get_bottom_tensor_view(),
                              bias_dram_block_window_tmp.get_window_lengths(),
-                             {bias_origin.at(number<0>{}),
-                              logical_seqlen_k_start - (physical_seqlen_k_start -
-                                                        aligned_physical_seqlen_k_start)}, // M/N
+                             {bias_origin.at(number<0>{}), seqlen_k_start}, // M/N
                              Policy::template MakeBiasDramTileDistribution<decltype(gemm_0)>());
 
-        auto [i_page_block_v, v_dram_window] = v_page_block_navigator.make_tile_window(
-            v_dram_block_window_lengths,
-            {0, aligned_physical_seqlen_k_start}, // TODO: hdim split?
-            Policy::template MakeVDramTileDistribution<Problem>());
+        auto v_dist                 = Policy::template MakeVDramTileDistribution<Problem>();
+        auto v_coord                = v_dist.calculate_index();
+        const auto VPageIndexDim    = I1;
+        using VDstrEncode           = typename decltype(v_dist)::DstrEncode;
+        constexpr index_t V_KRepeat = VDstrEncode::hs_lengthss_[I1][I3];
+        statically_indexed_array<index_t, V_KRepeat> v_offsets;
+        static_for<0, V_KRepeat, 1>{}([&](auto k0) {
+            v_offsets[k0] = kv_page_indices[v_coord[VPageIndexDim] + k0.value] * stride_v;
+        });
+        auto v_dram_window =
+            make_tile_scatter_gather(v_dram_block_window_tmp.get_bottom_tensor_view(),
+                                     v_dram_block_window_tmp.get_window_lengths(),
+                                     {0, seqlen_k_start}, // TODO: hdim split?
+                                     v_dist,
+                                     v_offsets,
+                                     VPageIndexDim);
 
         // store Q into LDS
         __builtin_amdgcn_sched_barrier(0);
@@ -339,9 +334,22 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
         static_assert(2 <= k0_loops);
         static_assert(1 <= k1_loops);
 
-        auto k_dram_window = make_tile_window(
-            k_dram_block_window,
-            Policy::template MakeKDramTileDistribution<Problem>()); // K DRAM tile window for
+        auto k_dram_window = [&] {
+            auto k_dist               = Policy::template MakeKDramTileDistribution<Problem>();
+            auto k_coord              = k_dist.calculate_index();
+            using KDstrEncode         = typename decltype(k_dist)::DstrEncode;
+            constexpr index_t NRepeat = KDstrEncode::hs_lengthss_[I0][I0];
+            statically_indexed_array<index_t, NRepeat> k_offsets;
+            static_for<0, NRepeat, 1>{}([&](auto n0) {
+                k_offsets[n0] = kv_page_indices[k_coord[0] + kN0 / NRepeat * n0.value] * stride_k;
+            });
+
+            return make_tile_scatter_gather(k_dram_block_window.get_bottom_tensor_view(),
+                                            k_dram_block_window.get_window_lengths(),
+                                            k_dram_block_window.get_window_origin(),
+                                            k_dist,
+                                            k_offsets); // K DRAM tile window for
+        }();
 
         // load the first tile of the first iteration and store to LDS
         auto k_block_tile = load_tile(k_dram_window);
@@ -392,7 +400,13 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
             }
 
             const auto v_prefetch = load_tile(v_dram_window); // prefetch load v tile
-            {                                                 // tail
+
+            static_for<0, V_KRepeat, 1>{}([&](auto k0) {
+                v_offsets[k0] = kv_page_indices[kK1 + v_coord[VPageIndexDim] + k0.value] * stride_v;
+            });
+            v_dram_window.update_page_idx(v_offsets);
+
+            { // tail
                 block_sync_lds();
                 gemm_0(s_acc,
                        get_slice_tile(q_tile,
@@ -430,8 +444,7 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
             }
             else if constexpr(BiasEnum == BlockAttentionBiasEnum::ALIBI)
             {
-                const auto k_origin = k_page_block_navigator.to_global_window_origin(
-                    i_page_block_k, k_dram_block_window.get_window_origin());
+                const auto k_origin    = k_dram_block_window.get_window_origin();
                 constexpr auto s_spans = decltype(s_acc)::get_distributed_spans();
                 s_acc                  = tile_elementwise_in(s_acc_element_func, s_acc);
                 sweep_tile_span(s_spans[number<0>{}], [&](auto idx0) {
@@ -457,35 +470,9 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
 #endif
             }
             move_tile_window(bias_dram_window, {0, kN0});
-
-            /// TODO: only check in first/last iteration without increasing code size
-            if constexpr(kHasUnevenSplits)
-            {
-                const auto k_origin = k_page_block_navigator.to_global_window_origin(
-                    i_page_block_k, k_dram_block_window.get_window_origin());
-                set_tile_if(
-                    s_acc,
-                    -numeric<SMPLComputeDataType>::infinity(),
-                    [&,
-                     physical_seqlen_k_start_ = physical_seqlen_k_start,
-                     physical_seqlen_k_end_   = physical_seqlen_k_end](auto tile_idx) {
-                        const auto col = k_origin.at(number<0>{}) + tile_idx.at(number<1>{});
-                        if constexpr(kIsPagedKV)
-                        {
-                            return col < physical_seqlen_k_start_ || physical_seqlen_k_end_ <= col;
-                        }
-                        else
-                        {
-                            return physical_seqlen_k_end_ <= col;
-                        }
-                    });
-            }
-
             if constexpr(kPadSeqLenK || FmhaMask::IsMasking)
             {
-                const auto k_origin = k_page_block_navigator.to_global_window_origin(
-                    i_page_block_k, k_dram_block_window.get_window_origin());
-                // mask accept only logical coordinates, do conversion here
+                const auto k_origin      = k_dram_block_window.get_window_origin();
                 bool need_perpixel_check = mask.IsEdgeTile(q_origin.at(number<0>{}),
                                                            k_origin.at(number<0>{}),
                                                            number<kM0>{},
@@ -507,12 +494,23 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
             if(i_total_loops < num_total_loop - 1)
             {
                 // move K tile windows
-                i_page_block_k = k_page_block_navigator.move_tile_window(
-                    i_page_block_k, k_dram_block_window, {kN0, 0});
+                move_tile_window(k_dram_block_window, {kN0, 0});
 
-                k_dram_window = make_tile_window(
-                    k_dram_block_window,
-                    Policy::template MakeKDramTileDistribution<Problem>()); // K DRAM tile window
+                auto k_dist               = Policy::template MakeKDramTileDistribution<Problem>();
+                auto k_coord              = k_dist.calculate_index();
+                using KDstrEncode         = typename decltype(k_dist)::DstrEncode;
+                constexpr index_t NRepeat = KDstrEncode::hs_lengthss_[I0][I0];
+                statically_indexed_array<index_t, NRepeat> k_offsets;
+                static_for<0, NRepeat, 1>{}([&](auto n0) {
+                    k_offsets[n0] =
+                        (kv_page_indices + kN0)[k_coord[0] + kN0 / NRepeat * n0.value] * stride_k;
+                });
+                k_dram_window =
+                    make_tile_scatter_gather(k_dram_block_window.get_bottom_tensor_view(),
+                                             k_dram_block_window.get_window_lengths(),
+                                             k_dram_block_window.get_window_origin(),
+                                             k_dist,
+                                             k_offsets); // K DRAM tile window for
 
                 // laod the first tile of the first iteration and store to LDS
                 k_block_tile = load_tile(k_dram_window);
@@ -634,16 +632,21 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                 store_tile(v_lds_window,
                            tile_elementwise_in(v_element_func, v_prefetch)); // store the prefetch
             }
-            i_page_block_v =
-                v_page_block_navigator.move_tile_window(i_page_block_v, v_dram_window, {0, kK1});
+            move_tile_window(v_dram_window, {0, kK1});
 
             // STAGE 3, KV gemm
             if constexpr(k1_loops > 1)
             {
-                static_for<0, k1_loops - 1, 1>{}([&,
-                                                  &i_page_block_v_ = i_page_block_v,
-                                                  &v_dram_window_  = v_dram_window](auto i_k1) {
+                static_for<0, k1_loops - 1, 1>{}([&, &v_dram_window_ = v_dram_window](auto i_k1) {
                     const auto v = load_tile(v_dram_window_); // load next v
+
+                    static_for<0, V_KRepeat, 1>{}([&](auto k0) {
+                        v_offsets[k0] = kv_page_indices[kK1 * 2 + i_k1.value * kK1 +
+                                                        v_coord[VPageIndexDim] + k0.value] *
+                                        stride_v;
+                    });
+                    v_dram_window.update_page_idx(v_offsets);
+
                     block_sync_lds();
 
                     gemm_1(o_acc,
@@ -666,11 +669,9 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                         store_tile(v_lds_window,
                                    tile_elementwise_in(v_element_func, v)); // store next v
                     }
-                    i_page_block_v_ = v_page_block_navigator.move_tile_window(
-                        i_page_block_v_, v_dram_window_, {0, kK1});
+                    move_tile_window(v_dram_window, {0, kK1});
                 });
             }
-
             // tail
             {
                 block_sync_lds();
@@ -680,15 +681,13 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                        v_lds_window);
                 block_sync_lds();
             }
-
+            kv_page_indices += kN0;
             __builtin_amdgcn_sched_barrier(0);
 
-            // load the first tile for next iteration
+            // store the first tile for next iteration
             if(i_total_loops < num_total_loop - 1)
             {
                 // store the first tile for next iteration to LDS
-                // moving k_dram_window is an in-page-block operation, so there is
-                // no need to invoke k_page_block_navigator.move_tile_window() here.
                 move_tile_window(k_dram_window, {0, kK0});
                 store_tile(k_lds_window, tile_elementwise_in(k_element_func, k_block_tile));
             }
@@ -750,19 +749,15 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
     }
 
     template <typename QDramBlockWindowTmp,
-              typename KDramBlockWindowLengths,
-              typename KPageBlockNavigator,
-              typename VDramBlockWindowLengths,
-              typename VPageBlockNavigator,
+              typename KDramBlockWindowTmp,
+              typename VDramBlockWindowTmp,
               typename BiasDramBlockWindowTmp,
               typename LSEaccDramBlockWindowTmp,
               typename PositionEncoding>
     CK_TILE_HOST_DEVICE auto
-    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,         // M0*K0 tile
-               const KDramBlockWindowLengths& k_dram_block_window_lengths, // N0*K0 tile
-               const KPageBlockNavigator& k_page_block_navigator,
-               const VDramBlockWindowLengths& v_dram_block_window_lengths, // N1*K1 tile
-               const VPageBlockNavigator& v_page_block_navigator,
+    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
+               const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
+               const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
                LSEaccDramBlockWindowTmp& lse_acc_dram_block_window_tmp,  // M0*1 tile
                index_t num_splits,
@@ -770,15 +765,16 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                FmhaMask mask,
                PositionEncoding position_encoding,
                float scale_s,
-               void* smem_ptr) const
+               void* smem_ptr,
+               const int32_t* kv_page_indices,
+               const index_t stride_k,
+               const index_t stride_v) const
     {
         return operator()(q_dram_block_window_tmp,
                           identity{},
-                          k_dram_block_window_lengths,
-                          k_page_block_navigator,
+                          k_dram_block_window_tmp,
                           identity{},
-                          v_dram_block_window_lengths,
-                          v_page_block_navigator,
+                          v_dram_block_window_tmp,
                           identity{},
                           bias_dram_block_window_tmp,
                           identity{},
@@ -792,7 +788,10 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                           mask,
                           position_encoding,
                           scale_s,
-                          smem_ptr);
+                          smem_ptr,
+                          kv_page_indices,
+                          stride_k,
+                          stride_v);
     }
 };
 

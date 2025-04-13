@@ -1109,9 +1109,6 @@ bool run(const ck_tile::ArgParser& arg_parser)
                     (0 < page_block_size ? kv_last_page_lens_buf.GetDeviceBuffer() : nullptr);
                 args.page_block_size = page_block_size;
 
-                args.cache_batch_idx =
-                    (use_cache_batch_idx ? cache_batch_idx_buf.GetDeviceBuffer() : nullptr);
-
                 args.num_splits = num_splits;
 
                 args.stride_o_acc         = stride_o_acc;

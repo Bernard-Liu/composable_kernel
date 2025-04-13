@@ -342,8 +342,6 @@ struct fmha_batch_decode_args
     void* kv_last_page_lens;
     ck_tile::index_t page_block_size;
 
-    const void* cache_batch_idx;
-
     // the real seqlen_q & seqlen_k are decided by following:
     // batch mode: seqlen_q = kargs.seqlen_q
     //             seqlen_k = kargs.seqlen_k
@@ -843,7 +841,6 @@ auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
                                      args.kv_page_indices,
                                      args.kv_last_page_lens,
                                      args.page_block_size,
-                                     args.cache_batch_idx,
                                      args.scale_s,
                                      args.scale_p,
                                      args.stride_q,
