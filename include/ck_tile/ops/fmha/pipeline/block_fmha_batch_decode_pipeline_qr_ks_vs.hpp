@@ -496,21 +496,24 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                 // move K tile windows
                 move_tile_window(k_dram_block_window, {kN0, 0});
 
-                auto k_dist               = Policy::template MakeKDramTileDistribution<Problem>();
-                auto k_coord              = k_dist.calculate_index();
-                using KDstrEncode         = typename decltype(k_dist)::DstrEncode;
-                constexpr index_t NRepeat = KDstrEncode::hs_lengthss_[I0][I0];
-                statically_indexed_array<index_t, NRepeat> k_offsets;
-                static_for<0, NRepeat, 1>{}([&](auto n0) {
-                    k_offsets[n0] =
-                        (kv_page_indices + kN0)[k_coord[0] + kN0 / NRepeat * n0.value] * stride_k;
-                });
-                k_dram_window =
-                    make_tile_scatter_gather(k_dram_block_window.get_bottom_tensor_view(),
-                                             k_dram_block_window.get_window_lengths(),
-                                             k_dram_block_window.get_window_origin(),
-                                             k_dist,
-                                             k_offsets); // K DRAM tile window for
+                k_dram_window = [&] {
+                    auto k_dist       = Policy::template MakeKDramTileDistribution<Problem>();
+                    auto k_coord      = k_dist.calculate_index();
+                    using KDstrEncode = typename decltype(k_dist)::DstrEncode;
+                    constexpr index_t NRepeat = KDstrEncode::hs_lengthss_[I0][I0];
+                    statically_indexed_array<index_t, NRepeat> k_offsets;
+                    static_for<0, NRepeat, 1>{}([&](auto n0) {
+                        k_offsets[n0] =
+                            (kv_page_indices + kN0)[k_coord[0] + kN0 / NRepeat * n0.value] *
+                            stride_k;
+                    });
+
+                    return make_tile_scatter_gather(k_dram_block_window.get_bottom_tensor_view(),
+                                                    k_dram_block_window.get_window_lengths(),
+                                                    k_dram_block_window.get_window_origin(),
+                                                    k_dist,
+                                                    k_offsets); // K DRAM tile window for
+                }();
 
                 // laod the first tile of the first iteration and store to LDS
                 k_block_tile = load_tile(k_dram_window);
@@ -637,8 +640,8 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
             // STAGE 3, KV gemm
             if constexpr(k1_loops > 1)
             {
-                static_for<0, k1_loops - 1, 1>{}([&, &v_dram_window_ = v_dram_window](auto i_k1) {
-                    const auto v = load_tile(v_dram_window_); // load next v
+                static_for<0, k1_loops - 1, 1>{}([&](auto i_k1) {
+                    const auto v = load_tile(v_dram_window); // load next v
 
                     static_for<0, V_KRepeat, 1>{}([&](auto k0) {
                         v_offsets[k0] = kv_page_indices[kK1 * 2 + i_k1.value * kK1 +
@@ -648,13 +651,11 @@ struct BlockFmhaBatchDecodeWithPagedKVCachePipelineQRKSVS
                     v_dram_window.update_page_idx(v_offsets);
 
                     block_sync_lds();
-
                     gemm_1(o_acc,
                            get_slice_tile(
                                p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
                            v_lds_window);
                     block_sync_lds();
-
                     if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
                     {
                         auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(

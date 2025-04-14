@@ -595,6 +595,9 @@ struct FmhaBatchPrefillWithPagedKVCacheKernel
         else
         {
             batch_offset_q = static_cast<long_index_t>(i_batch) * kargs.batch_stride_q;
+
+            kargs.kv_page_indices += kargs.kv_indptr[i_batch];
+
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
                 batch_offset_bias = static_cast<long_index_t>(i_batch) * kargs.batch_stride_bias;

@@ -294,20 +294,23 @@ struct BlockFmhaBatchPrefillWithPagedKVCachePipelineQRKSVS
         do
         {
             // STAGE 1, QK gemm
-            auto k_dist               = Policy::template MakeKDramTileDistribution<Problem>();
-            auto k_coord              = k_dist.calculate_index();
-            using KDstrEncode         = typename decltype(k_dist)::DstrEncode;
-            constexpr index_t NRepeat = KDstrEncode::hs_lengthss_[I0][I0];
-            statically_indexed_array<index_t, NRepeat> k_offsets;
-            static_for<0, NRepeat, 1>{}([&](auto n0) {
-                k_offsets[n0] = kv_page_indices[k_coord[0] + kN0 / NRepeat * n0.value] * stride_k;
-            });
-            auto k_dram_window =
-                make_tile_scatter_gather(k_dram_block_window.get_bottom_tensor_view(),
-                                         k_dram_block_window.get_window_lengths(),
-                                         k_dram_block_window.get_window_origin(),
-                                         k_dist,
-                                         k_offsets); // K DRAM tile window for
+            auto k_dram_window = [&] {
+                auto k_dist               = Policy::template MakeKDramTileDistribution<Problem>();
+                auto k_coord              = k_dist.calculate_index();
+                using KDstrEncode         = typename decltype(k_dist)::DstrEncode;
+                constexpr index_t NRepeat = KDstrEncode::hs_lengthss_[I0][I0];
+                statically_indexed_array<index_t, NRepeat> k_offsets;
+                static_for<0, NRepeat, 1>{}([&](auto n0) {
+                    k_offsets[n0] =
+                        kv_page_indices[k_coord[0] + kN0 / NRepeat * n0.value] * stride_k;
+                });
+
+                return make_tile_scatter_gather(k_dram_block_window.get_bottom_tensor_view(),
+                                                k_dram_block_window.get_window_lengths(),
+                                                k_dram_block_window.get_window_origin(),
+                                                k_dist,
+                                                k_offsets); // K DRAM tile window for
+            }();
 
             auto k_block_tile = load_tile(k_dram_window);
             {

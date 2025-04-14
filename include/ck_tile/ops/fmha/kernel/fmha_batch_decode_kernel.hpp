@@ -562,6 +562,8 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
             batch_offset_lse_acc = static_cast<long_index_t>(i_batch) * kargs.batch_stride_lse_acc;
             batch_offset_o_acc   = static_cast<long_index_t>(i_batch) * kargs.batch_stride_o_acc;
 
+            kargs.kv_page_indices += kargs.kv_indptr[i_batch];
+
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
                 batch_offset_bias = static_cast<long_index_t>(i_batch) * kargs.batch_stride_bias;
