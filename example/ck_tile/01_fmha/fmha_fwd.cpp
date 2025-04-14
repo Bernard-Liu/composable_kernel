@@ -1018,6 +1018,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
                 (mode == mode_enum::group ? seqstart_q.GetDeviceBuffer() : nullptr);
             args.seqstart_k_ptr =
                 (mode == mode_enum::group ? seqstart_k.GetDeviceBuffer() : nullptr);
+            args.num_total_pages = seqstart_k_host.back();
             args.page_idx_ptr = (mode == mode_enum::group ? page_idx.GetDeviceBuffer() : nullptr);
             args.seqlen_k_ptr = ((mode == mode_enum::batch && use_kvcache) || 0 <= k_paddings_[0]
                                      ? seqlen_k_buf.GetDeviceBuffer()

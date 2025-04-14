@@ -125,6 +125,7 @@ struct fmha_fwd_args
     void* lse_ptr;
     void* o_ptr;
 
+    int32_t num_total_pages;
     const void* seqstart_q_ptr;
     const void* seqstart_k_ptr;
     const void*
@@ -327,6 +328,7 @@ auto fmha_fwd_create_kargs_and_grids(fmha_fwd_args args)
                                              args.seqstart_q_ptr,
                                              args.seqstart_k_ptr,
                                              args.seqlen_k_ptr,
+                                             args.num_total_pages,
                                              args.page_idx_ptr,
                                              args.hdim_q,
                                              args.hdim_v,

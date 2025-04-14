@@ -251,6 +251,8 @@ struct BlockFmhaPipelineQRKSVS
             }
         }
 
+        page_idx += seqlen_k_start;
+
         auto k_dram_block_window =
             make_tile_window(k_dram_block_window_tmp.get_bottom_tensor_view(),
                              k_dram_block_window_tmp.get_window_lengths(),

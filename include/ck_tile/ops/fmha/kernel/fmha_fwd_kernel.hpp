@@ -265,6 +265,7 @@ struct FmhaFwdKernel
         const int32_t* seqstart_q_ptr;
         const int32_t* seqstart_k_ptr;
         const int32_t* seqlen_k_ptr;
+        int32_t num_total_pages;
         const int32_t* page_idx;
     };
 
@@ -597,6 +598,7 @@ struct FmhaFwdKernel
                   const void* seqstart_q_ptr,
                   const void* seqstart_k_ptr,
                   const void* seqlen_k_ptr,
+                  int32_t num_total_pages,
                   const void* page_idx_ptr,
                   ck_tile::index_t hdim_q,
                   ck_tile::index_t hdim_v,
@@ -657,6 +659,7 @@ struct FmhaFwdKernel
                     reinterpret_cast<const int32_t*>(seqstart_q_ptr),
                     reinterpret_cast<const int32_t*>(seqstart_k_ptr),
                     reinterpret_cast<const int32_t*>(seqlen_k_ptr),
+                    num_total_pages,
                     reinterpret_cast<const int32_t*>(page_idx_ptr)};
 
         if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
@@ -965,7 +968,6 @@ struct FmhaFwdKernel
         const index_t i_n1 = __builtin_amdgcn_readfirstlane(i_tile_n * FmhaPipeline::kN1);
 
         long_index_t batch_offset_q       = 0;
-        long_index_t batch_offset_v       = 0;
         long_index_t batch_offset_bias    = 0;
         long_index_t batch_offset_randval = 0;
         long_index_t batch_offset_lse     = 0;
@@ -978,14 +980,6 @@ struct FmhaFwdKernel
             const long_index_t key_start   = kargs.seqstart_k_ptr[i_batch];
 
             batch_offset_q = query_start * kargs.stride_q;
-            if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
-            {
-                batch_offset_v = key_start * kargs.stride_v;
-            }
-            else
-            {
-                batch_offset_v = key_start;
-            }
 
             kargs.page_idx += key_start;
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
@@ -1026,7 +1020,6 @@ struct FmhaFwdKernel
         else
         {
             batch_offset_q = static_cast<long_index_t>(i_batch) * kargs.batch_stride_q;
-            batch_offset_v = static_cast<long_index_t>(i_batch) * kargs.batch_stride_v;
             if constexpr(BiasEnum == BlockAttentionBiasEnum::ELEMENTWISE_BIAS)
             {
                 batch_offset_bias = static_cast<long_index_t>(i_batch) * kargs.batch_stride_bias;
@@ -1052,8 +1045,7 @@ struct FmhaFwdKernel
             static_cast<long_index_t>(i_nhead / kargs.nhead_ratio_qk) * kargs.nhead_stride_k;
         const VDataType* v_ptr =
             reinterpret_cast<const VDataType*>(kargs.v_ptr) +
-            static_cast<long_index_t>(i_nhead / kargs.nhead_ratio_qk) * kargs.nhead_stride_v +
-            batch_offset_v;
+            static_cast<long_index_t>(i_nhead / kargs.nhead_ratio_qk) * kargs.nhead_stride_v;
         ODataType* o_ptr = reinterpret_cast<ODataType*>(kargs.o_ptr) +
                            static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_o +
                            batch_offset_o;
@@ -1084,12 +1076,12 @@ struct FmhaFwdKernel
         const auto k_dram = [&]() {
             const auto k_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                 k_ptr,
-                make_tuple(kargs.seqlen_k, kargs.hdim_q),
+                make_tuple(kargs.num_total_pages, kargs.hdim_q),
                 make_tuple(kargs.stride_k, 1),
                 number<FmhaPipeline::kAlignmentK>{},
                 number<1>{});
 
-            constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : false;
+            constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : true;
             return pad_tensor_view(
                 k_dram_naive,
                 make_tuple(number<FmhaPipeline::kN0>{}, number<FmhaPipeline::kK0>{}),
@@ -1100,19 +1092,19 @@ struct FmhaFwdKernel
             {
                 const auto v_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                     v_ptr,
-                    make_tuple(kargs.seqlen_k, kargs.hdim_v),
+                    make_tuple(kargs.num_total_pages, kargs.hdim_v),
                     make_tuple(kargs.stride_v, 1),
                     number<FmhaPipeline::kAlignmentV>{},
                     number<1>{});
 
-                const auto v_dram_transposed =
-                    transform_tensor_view(v_dram_naive,
-                                          make_tuple(make_pass_through_transform(kargs.hdim_v),
-                                                     make_pass_through_transform(kargs.seqlen_k)),
-                                          make_tuple(sequence<1>{}, sequence<0>{}),
-                                          make_tuple(sequence<0>{}, sequence<1>{}));
+                const auto v_dram_transposed = transform_tensor_view(
+                    v_dram_naive,
+                    make_tuple(make_pass_through_transform(kargs.hdim_v),
+                               make_pass_through_transform(kargs.num_total_pages)),
+                    make_tuple(sequence<1>{}, sequence<0>{}),
+                    make_tuple(sequence<0>{}, sequence<1>{}));
 
-                constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : false;
+                constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : true;
                 return pad_tensor_view(
                     v_dram_transposed,
                     make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
@@ -1122,7 +1114,7 @@ struct FmhaFwdKernel
             {
                 const auto v_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                     v_ptr,
-                    make_tuple(kargs.hdim_v, kargs.seqlen_k),
+                    make_tuple(kargs.hdim_v, kargs.num_total_pages),
                     make_tuple(kargs.stride_v, 1),
                     number<FmhaPipeline::kAlignmentV>{},
                     number<1>{});
