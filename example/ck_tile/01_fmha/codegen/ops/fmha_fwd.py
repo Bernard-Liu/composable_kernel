@@ -544,7 +544,6 @@ def get_fwd_blobs(kernel_filter : Optional[str], receipt, mask_impl) -> Tuple[Fm
                 # dummy receipt, added for testing
                 elif receipt == 300:
                     cond = dtype in ['fp16', 'bf16']
-                    cond &= mode == 'group'
                     cond &= pipeline.F_vlayout == 'row'
                     cond &= pipeline.F_bias == 'no'
                     cond &= pipeline.F_squant == 'f'
