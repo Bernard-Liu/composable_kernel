@@ -223,7 +223,6 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
           std::conditional_t<kIsPagedKV, CommonPageBlockTableKargs, EmptyKargs<3>>
     {
         const int32_t* seqstart_q_ptr;
-        const int32_t* seqstart_k_ptr;
 
         ck_tile::index_t batch_stride_k; // only used for paged-kvcache, this will be stride/size
                                          // for single kcache page-block
@@ -364,7 +363,6 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
                                   o */
               ck_tile::index_t batch,
               const void* seqstart_q_ptr,
-              const void* seqstart_k_ptr,
               ck_tile::index_t hdim_q,
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head_q,
@@ -429,7 +427,6 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
                     {},                   // placeholder for fp8_static_quant args
                     {},                   // placeholder for paged-block table
                     reinterpret_cast<const int32_t*>(seqstart_q_ptr),
-                    reinterpret_cast<const int32_t*>(seqstart_k_ptr),
                     batch_stride_k,
                     batch_stride_v};
 
@@ -530,7 +527,6 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         {
             // get starting offset for each batch
             const long_index_t query_start = kargs.seqstart_q_ptr[i_batch];
-            const long_index_t key_start   = kargs.seqstart_k_ptr[i_batch];
 
             batch_offset_q = query_start * kargs.stride_q;
 
@@ -545,7 +541,7 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
             batch_offset_o_acc   = query_start * kargs.stride_o_acc;
 
             // get real # queries & # keys under group mode
-            kargs.seqlen_q = kargs.seqstart_q_ptr[i_batch + 1] - key_start;
+            kargs.seqlen_q = kargs.seqstart_q_ptr[i_batch + 1] - query_start;
 
             // # of required blocks is different in each groups, terminate unnecessary blocks
             // earlier

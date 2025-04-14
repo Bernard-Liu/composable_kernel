@@ -363,7 +363,6 @@ struct fmha_batch_decode_args
     //             seqlen_k = kargs.seqstart_k_ptr[b + 1] - kargs.seqstart_k_ptr[b]
     //                      or kargs.seqlen_k_ptr[b]
     const void* seqstart_q_ptr;
-    const void* seqstart_k_ptr;
 
     ck_tile::index_t seqlen_q;
     ck_tile::index_t seqlen_k;
@@ -790,7 +789,6 @@ auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
                                      args.o_acc_ptr,
                                      args.batch,
                                      args.seqstart_q_ptr,
-                                     args.seqstart_k_ptr,
                                      args.hdim_q,
                                      args.hdim_v,
                                      args.nhead_q,

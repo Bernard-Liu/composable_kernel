@@ -1026,17 +1026,14 @@ bool run(const ck_tile::ArgParser& arg_parser)
 
             args.seqstart_q_ptr =
                 (mode == mode_enum::group ? seqstart_q.GetDeviceBuffer() : nullptr);
-            if constexpr(!std::is_same_v<fmha_batch_prefill_args, std::decay_t<decltype(args)>>)
+            if constexpr(std::is_same_v<fmha_fwd_args, std::decay_t<decltype(args)>>)
             {
                 args.seqstart_k_ptr =
                     (mode == mode_enum::group ? seqstart_k.GetDeviceBuffer() : nullptr);
 
-                if constexpr(std::is_same_v<fmha_fwd_args, std::decay_t<decltype(args)>>)
-                {
-                    args.seqlen_k_ptr = (mode == mode_enum::batch || 0 <= k_paddings_[0]
-                                             ? seqlen_k_buf.GetDeviceBuffer()
-                                             : nullptr);
-                }
+                args.seqlen_k_ptr = (mode == mode_enum::batch || 0 <= k_paddings_[0]
+                                         ? seqlen_k_buf.GetDeviceBuffer()
+                                         : nullptr);
             }
 
             args.seqlen_k     = shape_seqlen_k; // unused in group mode (or kvcache enabled)

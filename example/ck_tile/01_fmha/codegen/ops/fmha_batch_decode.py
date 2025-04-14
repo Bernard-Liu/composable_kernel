@@ -142,15 +142,7 @@ template<>
 void fmha_batch_decode_oneshot_<trait_{F_idx}>(const ck_tile::stream_config& s, fmha_batch_decode_args a)
 {{
     if constexpr({F_mode} == false) {{ // batch mode
-        // we don't check every seqlen_k values for kvcache
-        if (a.seqstart_k_ptr != nullptr) {{
-            run_instance</*kHasUnevenSplits=*/true>(s, a);
-        // make sure F_bn0 is divisible by F_bk1
-        }} else if (a.seqlen_k % (a.num_splits * {F_bn0}) == 0) {{
-            run_instance</*kHasUnevenSplits=*/false>(s, a);
-        }} else {{
-            run_instance</*kHasUnevenSplits=*/true>(s, a);
-        }}
+        run_instance</*kHasUnevenSplits=*/true>(s, a);
     }} else {{
         run_instance</*kHasUnevenSplits=*/true>(s, a);
     }}
