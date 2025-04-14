@@ -185,6 +185,7 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
 
     struct CommonPageBlockTableKargs
     {
+        int32_t num_total_pages;
         const int32_t* kv_indptr;
         const int32_t* kv_page_indices;
         const int32_t* kv_last_page_lens;
@@ -250,6 +251,7 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
               ck_tile::index_t num_head_q,
               ck_tile::index_t nhead_ratio_qk,
               ck_tile::index_t num_splits,
+              int32_t num_total_pages,
               const void* kv_indptr,
               const void* kv_page_indices,
               const void* kv_last_page_lens,
@@ -342,6 +344,7 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         }
         if constexpr(kIsPagedKV)
         {
+            kargs.num_total_pages   = num_total_pages;
             kargs.kv_indptr         = reinterpret_cast<const int32_t*>(kv_indptr);
             kargs.kv_page_indices   = reinterpret_cast<const int32_t*>(kv_page_indices);
             kargs.kv_last_page_lens = reinterpret_cast<const int32_t*>(kv_last_page_lens);
@@ -368,6 +371,7 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
               ck_tile::index_t num_head_q,
               ck_tile::index_t nhead_ratio_qk,
               ck_tile::index_t num_splits,
+              int32_t num_total_pages,
               const void* kv_indptr,
               const void* kv_page_indices,
               const void* kv_last_page_lens,
@@ -453,6 +457,7 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         }
         if constexpr(kIsPagedKV)
         {
+            kargs.num_total_pages   = num_total_pages;
             kargs.kv_indptr         = reinterpret_cast<const int32_t*>(kv_indptr);
             kargs.kv_page_indices   = reinterpret_cast<const int32_t*>(kv_page_indices);
             kargs.kv_last_page_lens = reinterpret_cast<const int32_t*>(kv_last_page_lens);
@@ -639,12 +644,12 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         const auto k_dram = [&]() {
             const auto k_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                 k_ptr,
-                make_tuple(kargs.seqlen_k, kargs.hdim_q),
+                make_tuple(kargs.num_total_pages * kargs.page_block_size, kargs.hdim_q),
                 make_tuple(kargs.stride_k, 1),
                 number<FmhaPipeline::kAlignmentK>{},
                 number<1>{});
 
-            constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : false;
+            constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : true;
             return pad_tensor_view(
                 k_dram_naive,
                 make_tuple(number<FmhaPipeline::kN0>{}, number<FmhaPipeline::kK0>{}),
@@ -655,19 +660,20 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
             {
                 const auto v_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                     v_ptr,
-                    make_tuple(kargs.seqlen_k, kargs.hdim_v),
+                    make_tuple(kargs.num_total_pages * kargs.page_block_size, kargs.hdim_v),
                     make_tuple(kargs.stride_v, 1),
                     number<FmhaPipeline::kAlignmentV>{},
                     number<1>{});
 
-                const auto v_dram_transposed =
-                    transform_tensor_view(v_dram_naive,
-                                          make_tuple(make_pass_through_transform(kargs.hdim_v),
-                                                     make_pass_through_transform(kargs.seqlen_k)),
-                                          make_tuple(sequence<1>{}, sequence<0>{}),
-                                          make_tuple(sequence<0>{}, sequence<1>{}));
+                const auto v_dram_transposed = transform_tensor_view(
+                    v_dram_naive,
+                    make_tuple(
+                        make_pass_through_transform(kargs.hdim_v),
+                        make_pass_through_transform(kargs.num_total_pages * kargs.page_block_size)),
+                    make_tuple(sequence<1>{}, sequence<0>{}),
+                    make_tuple(sequence<0>{}, sequence<1>{}));
 
-                constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : false;
+                constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : true;
                 return pad_tensor_view(
                     v_dram_transposed,
                     make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
@@ -677,7 +683,7 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
             {
                 const auto v_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                     v_ptr,
-                    make_tuple(kargs.hdim_v, kargs.seqlen_k),
+                    make_tuple(kargs.hdim_v, kargs.num_total_pages * kargs.page_block_size),
                     make_tuple(kargs.stride_v, 1),
                     number<FmhaPipeline::kAlignmentV>{},
                     number<1>{});

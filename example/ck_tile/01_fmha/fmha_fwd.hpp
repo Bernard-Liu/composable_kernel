@@ -186,6 +186,17 @@ struct fmha_batch_prefill_args
     void* lse_ptr;
     void* o_ptr;
 
+    // the real seqlen_q & seqlen_k are decided by following:
+    // batch mode (kvcache):
+    //             seqlen_q = kargs.seqlen_q
+    //             seqlen_k = kargs.page_block_size * (kargs.kv_indptr[b + 1] - kargs.kv_indptr[b] -
+    //             1) +
+    //                        kargs.kv_last_page_lens[b]
+    // group mode (kvcache):
+    //             seqlen_q = kargs.seqstart_q_ptr[b + 1] - kargs.seqstart_q_ptr[b]
+    //             seqlen_k = kargs.page_block_size * (kargs.kv_indptr[b + 1] - kargs.kv_indptr[b] -
+    //             1) +
+    //                        kargs.kv_last_page_lens[b]
     const void* seqstart_q_ptr;
 
     ck_tile::index_t seqlen_q;
@@ -198,6 +209,7 @@ struct fmha_batch_prefill_args
     ck_tile::index_t nhead_k;
 
     // SGLang-style page table
+    int32_t num_total_pages;
     void* kv_indptr;
     void* kv_page_indices;
     void* kv_last_page_lens;
@@ -336,32 +348,17 @@ struct fmha_batch_decode_args
     void* lse_ptr;
     void* o_ptr;
 
-    // SGLang-style page table
-    void* kv_indptr;
-    void* kv_page_indices;
-    void* kv_last_page_lens;
-    ck_tile::index_t page_block_size;
-
     // the real seqlen_q & seqlen_k are decided by following:
-    // batch mode: seqlen_q = kargs.seqlen_q
-    //             seqlen_k = kargs.seqlen_k
-    // group mode: seqlen_q = kargs.seqstart_q_ptr[b + 1] - kargs.seqstart_q_ptr[b]
-    //             seqlen_k = kargs.seqstart_k_ptr[b + 1] - kargs.seqstart_k_ptr[b]
-    //                      or kargs.seqlen_k_ptr[b]
-    //
     // batch mode (kvcache):
     //             seqlen_q = kargs.seqlen_q
-    //             seqlen_k = kargs.seqlen_k_ptr[b]
+    //             seqlen_k = kargs.page_block_size * (kargs.kv_indptr[b + 1] - kargs.kv_indptr[b] -
+    //             1) +
+    //                        kargs.kv_last_page_lens[b]
     // group mode (kvcache):
     //             seqlen_q = kargs.seqstart_q_ptr[b + 1] - kargs.seqstart_q_ptr[b]
-    //
-    //     when is_gappy=true:
-    //             seqlen_k = kargs.seqlen_k_ptr[b]
-    //             seqstart_k_ptr[b] now store local offset of each batch
-    //
-    //     when is_gappy=false:
-    //             seqlen_k = kargs.seqstart_k_ptr[b + 1] - kargs.seqstart_k_ptr[b]
-    //                      or kargs.seqlen_k_ptr[b]
+    //             seqlen_k = kargs.page_block_size * (kargs.kv_indptr[b + 1] - kargs.kv_indptr[b] -
+    //             1) +
+    //                        kargs.kv_last_page_lens[b]
     const void* seqstart_q_ptr;
 
     ck_tile::index_t seqlen_q;
@@ -373,6 +370,13 @@ struct fmha_batch_decode_args
     ck_tile::index_t nhead_q;
     ck_tile::index_t nhead_k;
     ck_tile::index_t num_splits;
+
+    // SGLang-style page table
+    int32_t num_total_pages;
+    void* kv_indptr;
+    void* kv_page_indices;
+    void* kv_last_page_lens;
+    ck_tile::index_t page_block_size;
 
     float scale_s;
     float scale_p;
@@ -580,6 +584,7 @@ auto fmha_batch_prefill_create_kargs_and_grids(fmha_batch_prefill_args args)
                                          args.hdim_v,
                                          args.nhead_q,
                                          args.nhead_q / args.nhead_k,
+                                         args.num_total_pages,
                                          args.kv_indptr,
                                          args.kv_page_indices,
                                          args.kv_last_page_lens,
@@ -623,6 +628,7 @@ auto fmha_batch_prefill_create_kargs_and_grids(fmha_batch_prefill_args args)
                                          args.hdim_v,
                                          args.nhead_q,
                                          args.nhead_q / args.nhead_k,
+                                         args.num_total_pages,
                                          args.kv_indptr,
                                          args.kv_page_indices,
                                          args.kv_last_page_lens,
@@ -794,6 +800,7 @@ auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
                                      args.nhead_q,
                                      args.nhead_q / args.nhead_k,
                                      args.num_splits,
+                                     args.num_total_pages,
                                      args.kv_indptr,
                                      args.kv_page_indices,
                                      args.kv_last_page_lens,
@@ -835,6 +842,7 @@ auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
                                      args.nhead_q,
                                      args.nhead_q / args.nhead_k,
                                      args.num_splits,
+                                     args.num_total_pages,
                                      args.kv_indptr,
                                      args.kv_page_indices,
                                      args.kv_last_page_lens,

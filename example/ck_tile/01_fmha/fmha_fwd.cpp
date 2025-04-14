@@ -1079,6 +1079,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
             }
             else if constexpr(std::is_same_v<fmha_batch_prefill_args, std::decay_t<decltype(args)>>)
             {
+                args.num_total_pages   = max_num_page_blocks;
                 args.kv_indptr         = kv_indptr_buf.GetDeviceBuffer();
                 args.kv_page_indices   = kv_page_indices_buf.GetDeviceBuffer();
                 args.kv_last_page_lens = kv_last_page_lens_buf.GetDeviceBuffer();
@@ -1099,6 +1100,7 @@ bool run(const ck_tile::ArgParser& arg_parser)
                 args.lse_acc_ptr = lse_acc_buf.GetDeviceBuffer();
                 args.o_acc_ptr   = o_acc_buf.GetDeviceBuffer();
 
+                args.num_total_pages = max_num_page_blocks;
                 args.kv_indptr = (0 < page_block_size ? kv_indptr_buf.GetDeviceBuffer() : nullptr);
                 args.kv_page_indices =
                     (0 < page_block_size ? kv_page_indices_buf.GetDeviceBuffer() : nullptr);
