@@ -755,7 +755,8 @@ bool run(const ck_tile::ArgParser& arg_parser)
         {
             const int32_t num_pages = ck_tile::integer_divide_ceil(seqlen_k, page_block_size);
 
-            std::copy_n(std::next(block_table_host.begin(), kv_indptr_host.back()),
+            std::copy_n(std::next(block_table_host.begin(),
+                                  (kv_indptr_host.size() - 1) * block_table_host.get_length(1)),
                         num_pages,
                         std::back_inserter(kv_page_indices_host));
 
