@@ -1084,11 +1084,13 @@ bool run(const ck_tile::ArgParser& arg_parser)
             }
             else if constexpr(std::is_same_v<fmha_batch_prefill_args, std::decay_t<decltype(args)>>)
             {
-                args.num_total_pages   = max_num_page_blocks;
-                args.kv_indptr         = kv_indptr_buf.GetDeviceBuffer();
-                args.kv_page_indices   = kv_page_indices_buf.GetDeviceBuffer();
+                args.num_total_pages = max_num_page_blocks;
+                args.kv_indptr       = kv_indptr_buf.GetDeviceBuffer();
+                args.kv_page_indices = kv_page_indices_buf.GetDeviceBuffer();
+#if 0 // we assume page_block_size=1 for now
                 args.kv_last_page_lens = kv_last_page_lens_buf.GetDeviceBuffer();
                 args.page_block_size   = page_block_size;
+#endif
 
                 args.rand_val_ptr = randval_buf.GetDeviceBuffer();
 
@@ -1109,10 +1111,11 @@ bool run(const ck_tile::ArgParser& arg_parser)
                 args.kv_indptr = (0 < page_block_size ? kv_indptr_buf.GetDeviceBuffer() : nullptr);
                 args.kv_page_indices =
                     (0 < page_block_size ? kv_page_indices_buf.GetDeviceBuffer() : nullptr);
+#if 0 // we assume page_block_size=1 for now
                 args.kv_last_page_lens =
                     (0 < page_block_size ? kv_last_page_lens_buf.GetDeviceBuffer() : nullptr);
                 args.page_block_size = page_block_size;
-
+#endif
                 args.num_splits = num_splits;
 
                 args.stride_o_acc         = stride_o_acc;

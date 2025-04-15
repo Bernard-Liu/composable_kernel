@@ -212,8 +212,10 @@ struct fmha_batch_prefill_args
     int32_t num_total_pages;
     void* kv_indptr;
     void* kv_page_indices;
+#if 0 // we assume page_block_size=1 for now
     void* kv_last_page_lens;
     ck_tile::index_t page_block_size;
+#endif
 
     float scale_s;
     float scale_p;
@@ -375,8 +377,10 @@ struct fmha_batch_decode_args
     int32_t num_total_pages;
     void* kv_indptr;
     void* kv_page_indices;
+#if 0 // we assume page_block_size=1 for now
     void* kv_last_page_lens;
     ck_tile::index_t page_block_size;
+#endif
 
     float scale_s;
     float scale_p;
@@ -587,8 +591,10 @@ auto fmha_batch_prefill_create_kargs_and_grids(fmha_batch_prefill_args args)
                                          args.num_total_pages,
                                          args.kv_indptr,
                                          args.kv_page_indices,
+#if 0 // we assume page_block_size=1 for now
                                          args.kv_last_page_lens,
                                          args.page_block_size,
+#endif
                                          args.scale_s,
                                          args.scale_p,
                                          args.scale_o,
@@ -631,8 +637,10 @@ auto fmha_batch_prefill_create_kargs_and_grids(fmha_batch_prefill_args args)
                                          args.num_total_pages,
                                          args.kv_indptr,
                                          args.kv_page_indices,
+#if 0 // we assume page_block_size=1 for now
                                          args.kv_last_page_lens,
                                          args.page_block_size,
+#endif
                                          args.scale_s,
                                          args.scale_p,
                                          args.scale_o,
@@ -803,8 +811,10 @@ auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
                                      args.num_total_pages,
                                      args.kv_indptr,
                                      args.kv_page_indices,
+#if 0 // we assume page_block_size=1 for now
                                      args.kv_last_page_lens,
                                      args.page_block_size,
+#endif
                                      args.scale_s,
                                      args.scale_p,
                                      args.stride_q,
@@ -845,8 +855,10 @@ auto fmha_batch_decode_create_kargs_and_grids(fmha_batch_decode_args args)
                                      args.num_total_pages,
                                      args.kv_indptr,
                                      args.kv_page_indices,
+#if 0 // we assume page_block_size=1 for now
                                      args.kv_last_page_lens,
                                      args.page_block_size,
+#endif
                                      args.scale_s,
                                      args.scale_p,
                                      args.stride_q,

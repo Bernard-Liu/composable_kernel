@@ -188,8 +188,12 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         int32_t num_total_pages;
         const int32_t* kv_indptr;
         const int32_t* kv_page_indices;
+#if 0 // we assume page_block_size=1 for now
         const int32_t* kv_last_page_lens;
         ck_tile::index_t page_block_size;
+#else
+        static constexpr ck_tile::index_t page_block_size = 1;
+#endif
     };
 
     struct BatchModeKargs
@@ -254,8 +258,10 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
               int32_t num_total_pages,
               const void* kv_indptr,
               const void* kv_page_indices,
+#if 0 // we assume page_block_size=1 for now
               const void* kv_last_page_lens,
               ck_tile::index_t page_block_size,
+#endif
               float scale_s,
               float scale_p,
               ck_tile::index_t stride_q,
@@ -344,11 +350,13 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         }
         if constexpr(kIsPagedKV)
         {
-            kargs.num_total_pages   = num_total_pages;
-            kargs.kv_indptr         = reinterpret_cast<const int32_t*>(kv_indptr);
-            kargs.kv_page_indices   = reinterpret_cast<const int32_t*>(kv_page_indices);
+            kargs.num_total_pages = num_total_pages;
+            kargs.kv_indptr       = reinterpret_cast<const int32_t*>(kv_indptr);
+            kargs.kv_page_indices = reinterpret_cast<const int32_t*>(kv_page_indices);
+#if 0 // we assume page_block_size=1 for now
             kargs.kv_last_page_lens = reinterpret_cast<const int32_t*>(kv_last_page_lens);
             kargs.page_block_size   = page_block_size;
+#endif
         }
 
         return kargs;
@@ -374,8 +382,10 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
               int32_t num_total_pages,
               const void* kv_indptr,
               const void* kv_page_indices,
+#if 0 // we assume page_block_size=1 for now
               const void* kv_last_page_lens,
               ck_tile::index_t page_block_size,
+#endif
               float scale_s,
               float scale_p,
               ck_tile::index_t stride_q,
@@ -457,11 +467,13 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         }
         if constexpr(kIsPagedKV)
         {
-            kargs.num_total_pages   = num_total_pages;
-            kargs.kv_indptr         = reinterpret_cast<const int32_t*>(kv_indptr);
-            kargs.kv_page_indices   = reinterpret_cast<const int32_t*>(kv_page_indices);
+            kargs.num_total_pages = num_total_pages;
+            kargs.kv_indptr       = reinterpret_cast<const int32_t*>(kv_indptr);
+            kargs.kv_page_indices = reinterpret_cast<const int32_t*>(kv_page_indices);
+#if 0 // we assume page_block_size=1 for now
             kargs.kv_last_page_lens = reinterpret_cast<const int32_t*>(kv_last_page_lens);
             kargs.page_block_size   = page_block_size;
+#endif
         }
 
         return kargs;
@@ -527,7 +539,9 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
         long_index_t batch_offset_o_acc   = 0;
 
         const int32_t num_page_blocks = kargs.kv_indptr[i_batch + 1] - kargs.kv_indptr[i_batch];
+#if 0 // we assume page_block_size=1 for now
         const int32_t last_page_len   = kargs.kv_last_page_lens[i_batch];
+#endif
         if constexpr(kIsGroupMode)
         {
             // get starting offset for each batch
@@ -555,7 +569,11 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
                 return;
             }
 
+#if 0 // we assume page_block_size=1 for now
             kargs.seqlen_k = (num_page_blocks - 1) * kargs.page_block_size + last_page_len;
+#else
+            kargs.seqlen_k = num_page_blocks;
+#endif
         }
         else
         {
@@ -570,7 +588,11 @@ struct FmhaBatchDecodeWithPagedKVCacheKernel
                 batch_offset_bias = static_cast<long_index_t>(i_batch) * kargs.batch_stride_bias;
             }
 
+#if 0 // we assume page_block_size=1 for now
             kargs.seqlen_k = (num_page_blocks - 1) * kargs.page_block_size + last_page_len;
+#else
+            kargs.seqlen_k = num_page_blocks;
+#endif
         }
 
         // for simplicity, batch stride we just modify the pointer
