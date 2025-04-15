@@ -764,6 +764,10 @@ bool run(const ck_tile::ArgParser& arg_parser)
             kv_last_page_lens_host.push_back(seqlen_k - (num_pages - 1) * page_block_size);
         }
     }
+    /// FIXME: We enlarge kv_page_indices to workaround read out-of-bound issue. Remove this after
+    ///        fixing the out-of-bound issue.
+    kv_page_indices_host.resize(kv_page_indices_host.size() +
+                                ck_tile::integer_divide_ceil(128, page_block_size));
     iota_shuffle(cache_batch_idx_host.begin(), cache_batch_idx_host.end(), 0);
 
     ck_tile::DeviceMem q_buf(q_host.get_element_space_size_in_bytes());
