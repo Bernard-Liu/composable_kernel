@@ -316,8 +316,11 @@ struct tile_scatter_gather
 
     template <typename DistributedTensor,
               index_t i_access_unsupport_ = -1,
-              bool oob_conditional_check  = true>
+              bool oob_conditional_check  = true,
+              bool is_tail_block          = false>
     CK_TILE_DEVICE auto load(DistributedTensor& dst_tensor,
+                             index_t tail_page_begin              = 0,
+                             index_t tail_page_end                = 0,
                              number<i_access_unsupport_>          = {},
                              bool_constant<oob_conditional_check> = {}) const
     {
@@ -342,9 +345,16 @@ struct tile_scatter_gather
                 const auto page_offset           = page_idx_[idx_m];
 
                 // read from bottom tensor
-                const vector_t vec_value =
+                vector_t vec_value =
                     get_bottom_tensor_view().template get_vectorized_elements<vector_t>(
                         bottom_tensor_thread_coord, page_offset, bool_constant<oob_conditional_check>{});
+
+                if constexpr (is_tail_block) {
+                    if (tail_page_end > tail_page_begin &&
+                        page_offset >= tail_page_begin &&
+                        page_offset < tail_page_end)
+                        vec_value = vector_t(0);
+                }
 #if 1
                 // write into distributed tensor
                 static_for<0, Traits::ScalarPerVector, Traits::PackedSize>{}([&](auto j) {
